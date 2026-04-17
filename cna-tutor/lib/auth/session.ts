@@ -16,7 +16,18 @@ export type Viewer = {
   profile: Profile;
 };
 
-function buildProfilePayload(user: User): ProfileInsert {
+export function resolveProductFromMetadata(value: unknown): "cna" | "ccma" {
+  return value === "ccma" ? "ccma" : "cna";
+}
+
+export function resolveProductFromProfile(profile: Pick<Profile, "product"> | { product?: unknown }) {
+  return profile.product === "ccma" ? "ccma" : "cna";
+}
+
+function buildProfilePayload(
+  user: User,
+  overrides?: Partial<ProfileInsert>,
+): ProfileInsert {
   const fullName =
     typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name.trim()
       ? user.user_metadata.full_name.trim()
@@ -29,6 +40,7 @@ function buildProfilePayload(user: User): ProfileInsert {
 
   const role = user.user_metadata?.role === "admin" ? "admin" : "student";
   const preferredLanguage = resolvePreferredLanguage(user.user_metadata?.preferred_language);
+  const product = resolveProductFromMetadata(user.user_metadata?.product);
 
   return {
     id: user.id,
@@ -36,7 +48,9 @@ function buildProfilePayload(user: User): ProfileInsert {
     full_name: fullName,
     cohort,
     role,
+    product,
     preferred_language: preferredLanguage,
+    ...overrides,
   };
 }
 
@@ -56,8 +70,9 @@ async function upsertProfile(
 export async function ensureProfileForUser(
   user: User,
   client?: ServerSupabaseClient,
+  overrides?: Partial<ProfileInsert>,
 ): Promise<Profile | null> {
-  const payload = buildProfilePayload(user);
+  const payload = buildProfilePayload(user, overrides);
 
   if (client) {
     const { data, error } = await upsertProfile(client, payload);

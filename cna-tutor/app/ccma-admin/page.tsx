@@ -8,7 +8,7 @@ import { ReportFilters } from "@/components/admin/report-filters";
 import { StudentStatusList } from "@/components/admin/student-status-list";
 import { TrendLine } from "@/components/dashboard/trend-line";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { getAdminDashboard } from "@/lib/ccma/dashboard/admin";
+import { getCcmaAdminDashboard } from "@/lib/ccma/dashboard/admin";
 
 type SearchParams = Promise<{
   from?: string;
@@ -42,7 +42,7 @@ function buildExportHref(filters: {
   }
 
   const query = params.toString();
-  return query ? `/api/reports/participants.csv?${query}` : "/api/reports/participants.csv";
+  return query ? `/api/ccma/reports/participants.csv?${query}` : "/api/ccma/reports/participants.csv";
 }
 
 export default async function AdminPage({
@@ -51,7 +51,7 @@ export default async function AdminPage({
   searchParams: SearchParams;
 }) {
   const filters = await searchParams;
-  const dashboard = await getAdminDashboard(filters);
+  const dashboard = await getCcmaAdminDashboard(filters);
 
   return (
     <div className="space-y-8">
@@ -141,7 +141,7 @@ export default async function AdminPage({
       </section>
 
       <div className="admin-report-chrome">
-        <ReportFilters cohorts={dashboard.cohorts} current={dashboard.filters} />
+        <ReportFilters cohorts={dashboard.cohorts as string[]} current={dashboard.filters} />
       </div>
 
       <section className="grid gap-6 xl:grid-cols-2 admin-report-chrome">

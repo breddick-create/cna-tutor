@@ -1,16 +1,16 @@
-import { tutorLessonLibrary } from "@/content/texas-cna/lesson-library";
+import { ccmaTutorLessonLibrary } from "@/content/ccma/lesson-library";
 import type { TutorLesson, TutorMode } from "@/lib/ccma/tutor/types";
 
 export function listTutorLessons() {
-  return tutorLessonLibrary;
+  return ccmaTutorLessonLibrary;
 }
 
 export function getTutorLesson(lessonId: string) {
-  return tutorLessonLibrary.find((lesson) => lesson.id === lessonId) ?? null;
+  return ccmaTutorLessonLibrary.find((lesson) => lesson.id === lessonId) ?? null;
 }
 
 export function getLessonByDomain(domainSlug: string) {
-  return tutorLessonLibrary.filter((lesson) => lesson.domainSlug === domainSlug);
+  return ccmaTutorLessonLibrary.filter((lesson) => lesson.domainSlug === domainSlug);
 }
 
 export function resolveLessonMode(

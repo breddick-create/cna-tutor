@@ -1,15 +1,19 @@
 import type { PretestDomainBreakdown } from "@/lib/ccma/onboarding/pretest";
 import { createClient } from "@/lib/supabase/server";
+import { getTutorLesson } from "@/lib/ccma/tutor/lessons";
+import { parseTutorSessionState } from "@/lib/ccma/tutor/orchestrator";
 import { getStudentProgressionSnapshot } from "@/lib/ccma/progression/student";
 import { formatDateTime } from "@/lib/utils";
 import type { ProgressionSnapshot } from "@/lib/ccma/progression/readiness";
 
 function average(values: number[]) {
-  if (!values.length) return null;
-  return Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
+  if (!values.length) {
+    return null;
+  }
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
-function getQuizTrend(scores: number[]) {
+function getTrend(scores: number[]) {
   const latestAverage = average(scores.slice(0, 3));
   const previousAverage = average(scores.slice(3, 6));
 
@@ -30,7 +34,6 @@ function getQuizTrend(scores: number[]) {
   }
 
   const delta = latestAverage - previousAverage;
-
   if (delta >= 4) {
     return {
       label: "Trending up",
@@ -38,7 +41,6 @@ function getQuizTrend(scores: number[]) {
       summary: "Your recent quiz scores are improving. That is a good sign that the study plan is working.",
     };
   }
-
   if (delta <= -4) {
     return {
       label: "Needs attention",
@@ -75,15 +77,13 @@ function getConfidenceTrend(scores: number[]) {
   }
 
   const delta = latestAverage - previousAverage;
-
   if (delta >= 1) {
     return {
       label: "Confidence rising",
       direction: "up" as const,
-      summary: "You're reporting more confidence before quizzes — a good sign when it rises alongside performance.",
+      summary: "You're reporting more confidence before quizzes, which is a good sign when it rises alongside performance.",
     };
   }
-
   if (delta <= -1) {
     return {
       label: "Confidence dipped",
@@ -141,15 +141,21 @@ function getProgressEncouragement(args: {
 }
 
 function getDaysSince(value: string | null) {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
+
   const timestamp = new Date(value).getTime();
-  if (Number.isNaN(timestamp)) return null;
+  if (Number.isNaN(timestamp)) {
+    return null;
+  }
+
   return Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
 }
 
 function isInactive(lastActivityAt: string | null) {
-  const daysSince = getDaysSince(lastActivityAt);
-  return daysSince !== null && daysSince > 5;
+  const daysSinceActivity = getDaysSince(lastActivityAt);
+  return daysSinceActivity !== null && daysSinceActivity > 5;
 }
 
 function getFailureRecoveryPlan(args: {
@@ -158,20 +164,21 @@ function getFailureRecoveryPlan(args: {
   mockAttempts: Array<{ percent: number }>;
   lastActivityAt: string | null;
   improvementCount: number;
-  quizTrend: ReturnType<typeof getQuizTrend>;
+  quizTrend: ReturnType<typeof getTrend>;
   resumableSessionId: string | null;
   resumableLessonTitle: string | null;
   resumableLessonDomainSlug: string | null;
 }) {
   const weakestDomain = args.progression.priorityOrder[0] ?? null;
-  const daysSince = getDaysSince(args.lastActivityAt);
+  const daysSinceActivity = getDaysSince(args.lastActivityAt);
   const recentLowQuizCount = args.quizAttempts
     .slice(0, 4)
-    .filter((a) => a.score < args.progression.config.thresholds.urgentWeakAreaScore).length;
+    .filter((attempt) => attempt.score < args.progression.config.thresholds.urgentWeakAreaScore).length;
   const recentLowMockCount = args.mockAttempts
     .slice(0, 2)
-    .filter((a) => a.percent < args.progression.config.thresholds.mockExamPassingScore).length;
-  const repeatedLowScores = recentLowQuizCount >= 2 || recentLowQuizCount + recentLowMockCount >= 2;
+    .filter((attempt) => attempt.percent < args.progression.config.thresholds.mockExamPassingScore).length;
+  const repeatedLowScores =
+    recentLowQuizCount >= 2 || recentLowQuizCount + recentLowMockCount >= 2;
   const lackOfProgress =
     !repeatedLowScores &&
     args.progression.signals.lessonsCompleted >= 2 &&
@@ -182,8 +189,8 @@ function getFailureRecoveryPlan(args: {
     !repeatedLowScores &&
     !lackOfProgress &&
     !args.progression.examReady &&
-    daysSince !== null &&
-    daysSince >= 7;
+    daysSinceActivity !== null &&
+    daysSinceActivity >= 7;
 
   if (!repeatedLowScores && !lackOfProgress && !inactivity) {
     return { active: false } as const;
@@ -204,7 +211,10 @@ function getFailureRecoveryPlan(args: {
             : `Resume ${targetDomainTitle}`,
         }
       : null;
-  const primaryAction = resumeWeakLesson ?? { href: reviewHref, label: `Review ${targetDomainTitle}` };
+  const primaryAction = resumeWeakLesson ?? {
+    href: reviewHref,
+    label: `Review ${targetDomainTitle}`,
+  };
 
   if (repeatedLowScores) {
     return {
@@ -237,7 +247,7 @@ function getFailureRecoveryPlan(args: {
       nextStep: {
         title: `Rebuild ${targetDomainTitle} next`,
         description:
-          "Focus on one weak section first, then use a 10-question quiz to check whether the main ideas are sticking.",
+          "Focus on one weak section first, then use a 10-question quiz to check whether the main ideas are finally sticking.",
         ctaLabel: primaryAction.label,
         ctaHref: primaryAction.href,
       },
@@ -249,8 +259,8 @@ function getFailureRecoveryPlan(args: {
     reason: "inactivity" as const,
     headline: "Restart with one focused step.",
     summary:
-      daysSince !== null
-        ? `It has been ${daysSince} day${daysSince === 1 ? "" : "s"} since your last study activity. The fastest way back in is one targeted review block, not a full reset.`
+      daysSinceActivity !== null
+        ? `It has been ${daysSinceActivity} day${daysSinceActivity === 1 ? "" : "s"} since your last study activity. The fastest way back in is one targeted review block, not a full reset.`
         : "You have been away from study for a bit. The fastest way back in is one targeted review block, not a full reset.",
     encouragement:
       args.quizTrend.direction === "down"
@@ -279,7 +289,7 @@ export async function getCcmaStudentDashboard(args: {
   pretestScore: number | null;
   pretestDomainBreakdown: PretestDomainBreakdown[];
 }) {
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
   const progression = await getStudentProgressionSnapshot({
     userId: args.userId,
     pretestScore: args.pretestScore,
@@ -287,29 +297,26 @@ export async function getCcmaStudentDashboard(args: {
   });
 
   const [
-    { data: rawQuizAttempts },
-    { data: rawMockAttempts },
-    { data: rawTutorSessions },
+    { data: quizAttempts },
+    { data: assessmentAttempts },
+    { data: tutorSessions },
     { data: profileRow },
-    { data: confidenceEvents },
   ] = await Promise.all([
     supabase
-      .from("quiz_attempts")
-      .select("id, score, total_questions, completed_at, domain_id")
+      .from("ccma_quiz_attempts")
+      .select("*")
       .eq("user_id", args.userId)
-      .not("completed_at", "is", null)
       .order("completed_at", { ascending: false })
       .limit(6),
     supabase
-      .from("mock_exam_attempts")
-      .select("id, percent, passed, completed_at")
+      .from("ccma_assessments")
+      .select("*")
       .eq("user_id", args.userId)
-      .not("completed_at", "is", null)
       .order("completed_at", { ascending: false })
       .limit(6),
     supabase
-      .from("tutor_sessions")
-      .select("id, status, mode, last_activity_at, session_state_json")
+      .from("ccma_tutor_sessions")
+      .select("id, status, last_activity_at, session_state_json")
       .eq("user_id", args.userId)
       .order("last_activity_at", { ascending: false })
       .limit(6),
@@ -319,83 +326,34 @@ export async function getCcmaStudentDashboard(args: {
       .eq("id", args.userId)
       .eq("product", "ccma")
       .single(),
-    supabase
-      .from("activity_events")
-      .select("metadata_json, occurred_at")
-      .eq("user_id", args.userId)
-      .in("event_type", ["quiz_completed", "weak_area_drill_completed"])
-      .order("occurred_at", { ascending: false })
-      .limit(12),
   ]);
 
-  const quizAttempts = rawQuizAttempts ?? [];
-  const mockAttempts = rawMockAttempts ?? [];
-  const tutorSessions = rawTutorSessions ?? [];
+  const recentQuizAttempts = quizAttempts ?? [];
+  const mockAttempts = (assessmentAttempts ?? [])
+    .filter((attempt: any) => attempt.mode === "mock_exam")
+    .map((attempt: any) => ({
+      percent: attempt.score,
+      completed_at: attempt.completed_at,
+    }));
 
-  const quizDomainIds = quizAttempts
-    .map((a) => a.domain_id)
-    .filter((v): v is string => Boolean(v));
-  const { data: quizDomains } = quizDomainIds.length
-    ? await supabase.from("domains").select("id, title").in("id", quizDomainIds)
-    : { data: [] };
-  const quizDomainMap = new Map((quizDomains ?? []).map((d) => [d.id, d.title]));
-
-  const confidenceScoresByOccurredAt = new Map(
-    (confidenceEvents ?? []).map((event) => {
-      const metadata = event.metadata_json as { confidenceScore?: number; confidenceLevel?: string } | null;
-      return [
-        event.occurred_at,
-        {
-          confidenceScore: typeof metadata?.confidenceScore === "number" ? metadata.confidenceScore : null,
-          confidenceLabel: typeof metadata?.confidenceLevel === "string" ? metadata.confidenceLevel : null,
-        },
-      ];
-    }),
+  const quizTrend = getTrend(recentQuizAttempts.map((attempt: any) => attempt.score));
+  const confidenceTrend = getConfidenceTrend(
+    recentQuizAttempts
+      .map((attempt: any) => attempt.confidence_score)
+      .filter((value: unknown): value is number => typeof value === "number"),
   );
-
-  const recentQuizConfidenceScores = quizAttempts
-    .map((a) =>
-      a.completed_at
-        ? (confidenceScoresByOccurredAt.get(a.completed_at)?.confidenceScore ?? null)
-        : null,
-    )
-    .filter((v): v is number => typeof v === "number");
-
-  const qualifyingQuizCount = quizAttempts.filter((a) => a.score >= 60).length;
-  const practiceExamRequirements = {
-    lessonsCompleted: progression.signals.lessonsCompleted,
-    lessonsRequired: progression.config.gates.practiceExamMinLessonsCompleted,
-    lessonsMet:
-      progression.signals.lessonsCompleted >= progression.config.gates.practiceExamMinLessonsCompleted,
-    qualifyingQuizCount,
-    qualifyingQuizRequired: 1,
-    qualifyingQuizMet: qualifyingQuizCount >= 1,
-  };
-
-  const quizTrend = getQuizTrend(quizAttempts.map((a) => a.score));
-  const confidenceTrend = getConfidenceTrend(recentQuizConfidenceScores);
   const improvementHighlights = getImprovementHighlights(progression);
-
   const resumableSession =
-    tutorSessions.find((s) => s.status === "active" || s.status === "paused") ?? null;
-
-  let resumableLesson: { title: string; domainSlug: string } | null = null;
-  if (resumableSession?.session_state_json) {
-    const state = resumableSession.session_state_json as { lessonId?: string } | null;
-    if (state?.lessonId) {
-      const { getLessonByDomain } = await import("@/lib/ccma/tutor/lessons");
-      const lessons = getLessonByDomain("");
-      const found = lessons.find((l: { id: string }) => l.id === state.lessonId) ?? null;
-      resumableLesson = found
-        ? { title: (found as { title: string }).title, domainSlug: (found as { domainSlug: string }).domainSlug }
-        : null;
-    }
-  }
-
+    (tutorSessions ?? []).find((session: any) => session.status === "active" || session.status === "paused") ??
+    null;
+  const resumableState = resumableSession
+    ? parseTutorSessionState(resumableSession.session_state_json)
+    : null;
+  const resumableLesson = resumableState ? getTutorLesson(resumableState.lessonId) : null;
   const recoveryPlan = getFailureRecoveryPlan({
     progression,
-    quizAttempts,
-    mockAttempts,
+    quizAttempts: recentQuizAttempts,
+    mockAttempts: mockAttempts.map((attempt: any) => ({ percent: attempt.percent })),
     lastActivityAt: profileRow?.last_activity_at ?? null,
     improvementCount: improvementHighlights.count,
     quizTrend,
@@ -434,11 +392,9 @@ export async function getCcmaStudentDashboard(args: {
             ctaHref: progression.nextBestTask.href,
           };
 
-  const inactive = isInactive(profileRow?.last_activity_at ?? null);
-
   return {
     progression,
-    isInactive: inactive,
+    isInactive: isInactive(profileRow?.last_activity_at ?? null),
     nextStep,
     recoveryPlan,
     weakAreas: progression.weakAreas.map((area) => ({
@@ -492,24 +448,32 @@ export async function getCcmaStudentDashboard(args: {
       confidenceLabel: confidenceTrend.label,
       confidenceDirection: confidenceTrend.direction,
       confidenceSummary: confidenceTrend.summary,
-      recentScores: quizAttempts.map((a) => ({
-        id: a.id,
-        score: a.score,
-        confidenceScore: a.completed_at
-          ? (confidenceScoresByOccurredAt.get(a.completed_at)?.confidenceScore ?? null)
-          : null,
-        confidenceLabel: a.completed_at
-          ? (confidenceScoresByOccurredAt.get(a.completed_at)?.confidenceLabel ?? null)
-          : null,
-        totalQuestions: a.total_questions,
-        domainTitle: a.domain_id ? quizDomainMap.get(a.domain_id) ?? "Practice quiz" : "Practice quiz",
-        completedAt: a.completed_at ? formatDateTime(a.completed_at) : "Recently completed",
+      recentScores: recentQuizAttempts.map((attempt: any) => ({
+        id: attempt.id,
+        score: attempt.score,
+        confidenceScore: attempt.confidence_score,
+        confidenceLabel: attempt.confidence_level,
+        totalQuestions: attempt.total_questions,
+        domainTitle:
+          attempt.domain_breakdown?.[0]?.domainTitle ??
+          attempt.domain_slug ??
+          "Practice quiz",
+        completedAt: attempt.completed_at ? formatDateTime(attempt.completed_at) : "Recently completed",
       })),
     },
     practiceExamStatus: {
       unlocked: progression.practiceExamUnlocked,
       completed: mockAttempts.length > 0,
-      requirements: practiceExamRequirements,
+      requirements: {
+        lessonsCompleted: progression.signals.lessonsCompleted,
+        lessonsRequired: progression.config.gates.practiceExamMinLessonsCompleted,
+        lessonsMet:
+          progression.signals.lessonsCompleted >= progression.config.gates.practiceExamMinLessonsCompleted,
+        qualifyingQuizCount: progression.signals.qualifyingQuizzesCompleted,
+        qualifyingQuizRequired: progression.config.gates.practiceExamMinQuizzesCompleted,
+        qualifyingQuizMet:
+          progression.signals.qualifyingQuizzesCompleted >= progression.config.gates.practiceExamMinQuizzesCompleted,
+      },
       attempts: progression.signals.mockExamsCompleted,
       bestScore: progression.signals.bestMockScore,
       lastScore: mockAttempts[0]?.percent ?? null,
@@ -521,8 +485,7 @@ export async function getCcmaStudentDashboard(args: {
           ? "Locked until more foundation work is done"
           : mockAttempts.length === 0
             ? "Ready for a full practice exam"
-            : (progression.signals.bestMockScore ?? 0) >=
-                progression.config.thresholds.mockExamPassingScore
+            : (progression.signals.bestMockScore ?? 0) >= progression.config.thresholds.mockExamPassingScore
               ? "Completed and in range"
               : "Completed, more work needed",
       summary:
@@ -530,8 +493,7 @@ export async function getCcmaStudentDashboard(args: {
           ? progression.practiceExamGateReason
           : mockAttempts.length === 0
             ? "You have enough foundation now for a full practice exam. Use it as one of your clearest readiness checks."
-            : (progression.signals.bestMockScore ?? 0) >=
-                progression.config.thresholds.mockExamPassingScore
+            : (progression.signals.bestMockScore ?? 0) >= progression.config.thresholds.mockExamPassingScore
               ? "Your best full practice exam is in range. Keep tightening weak areas so that score stays steady."
               : "Your full practice results show there is still targeted review to do before final readiness.",
     },

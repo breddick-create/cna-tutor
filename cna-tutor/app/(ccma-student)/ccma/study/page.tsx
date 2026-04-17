@@ -3,7 +3,7 @@ import Link from "next/link";
 import { GuidedStudyPath } from "@/components/student/guided-study-path";
 import { StudentEmptyState } from "@/components/student/student-empty-state";
 import { ContinueStudyCta } from "@/components/ccma/continue-study-cta";
-import { requireViewer } from "@/lib/auth/session";
+import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import { pickLocalizedText, resolvePreferredLanguage } from "@/lib/ccma/i18n/languages";
 import { getPretestDomainBreakdown, getPretestScore } from "@/lib/ccma/onboarding/pretest";
 import {
@@ -20,10 +20,10 @@ import { getTutorModeLabel } from "@/lib/ccma/tutor/mode-labels";
 import { formatDateTime } from "@/lib/utils";
 
 export default async function StudyPage() {
-  const viewer = await requireViewer();
+  const viewer = await requireCcmaViewer();
   const language = resolvePreferredLanguage(viewer.profile.preferred_language);
   const text = (en: string, es: string) => pickLocalizedText(language, { en, es });
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
 
   const [progression, { data: sessions }] = await Promise.all([
     getStudentProgressionSnapshot({
@@ -32,7 +32,7 @@ export default async function StudyPage() {
       pretestDomainBreakdown: getPretestDomainBreakdown(viewer.user),
     }),
     supabase
-      .from("tutor_sessions")
+      .from("ccma_tutor_sessions")
       .select("id, status, mode, last_activity_at, session_state_json")
       .eq("user_id", viewer.user.id)
       .order("last_activity_at", { ascending: false })
@@ -55,7 +55,7 @@ export default async function StudyPage() {
     ? getPreferredStudyMode(currentLesson, weakDomainSlugs)
     : null;
   const recentAllowedSessions = studySessions
-    .filter((session) => {
+    .filter((session: any) => {
       const lessonId = getLessonIdFromSessionState(session.session_state_json);
       return lessonId ? studyPath.allowedLessonIds.has(lessonId) : false;
     })
@@ -201,7 +201,7 @@ export default async function StudyPage() {
         </h3>
         <div className="mt-5 space-y-3">
           {recentAllowedSessions.length ? (
-            recentAllowedSessions.map((session) => {
+            recentAllowedSessions.map((session: any) => {
               const lessonId = getLessonIdFromSessionState(session.session_state_json);
               const lesson = lessonId ? getTutorLesson(lessonId) : null;
 
@@ -250,5 +250,3 @@ export default async function StudyPage() {
     </div>
   );
 }
-
-

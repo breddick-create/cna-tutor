@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { PretestDomainSection } from "@/components/ccma/pretest-domain-section";
-import { requireViewer } from "@/lib/auth/session";
+import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import {
   getPretestDomainBreakdown,
   getPretestScore,
@@ -17,7 +17,7 @@ const readinessToneStyles = {
 } as const;
 
 export default async function PretestResultsPage() {
-  const viewer = await requireViewer();
+  const viewer = await requireCcmaViewer();
 
   if (!hasCompletedPretest(viewer.user)) {
     redirect("/ccma/pretest");
@@ -57,7 +57,7 @@ export default async function PretestResultsPage() {
           <p className="eyebrow">Overall Score</p>
           <p className="mt-3 text-5xl font-semibold">{results.score}%</p>
           <p className="text-muted mt-3 text-sm leading-6">
-            Based on your first pre-test across the Texas CNA written exam topics.
+            Based on your first pre-test across the NHA CCMA exam domains.
           </p>
         </div>
 

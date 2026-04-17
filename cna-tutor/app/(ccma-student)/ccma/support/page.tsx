@@ -59,7 +59,7 @@ export default function SupportPage() {
                   .
                 </>
               ) : (
-                "For sign-in, account, or program support, contact your ACAM program administrator or designated help contact."
+                "For sign-in, account, or program support, contact your program administrator or designated help contact."
               )}
             </p>
           </div>

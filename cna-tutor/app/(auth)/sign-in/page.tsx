@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 
 import { signInAction } from "@/app/(auth)/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { getViewer } from "@/lib/auth/session";
+import { getViewer, resolveProductFromProfile } from "@/lib/auth/session";
+import { getStudentAuthRedirectPathForUser as getCcmaStudentAuthRedirectPathForUser } from "@/lib/ccma/progression/stage";
 import { getStudentAuthRedirectPathForUser } from "@/lib/progression/stage";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -23,14 +24,19 @@ export default async function SignInPage({
 
   if (viewer) {
     if (viewer.profile.role === "admin") {
-      redirect("/admin");
+      redirect(resolveProductFromProfile(viewer.profile) === "ccma" ? "/ccma-admin" : "/admin");
     }
 
     redirect(
-      await getStudentAuthRedirectPathForUser({
-        user: viewer.user,
-        userId: viewer.user.id,
-      }),
+      resolveProductFromProfile(viewer.profile) === "ccma"
+        ? await getCcmaStudentAuthRedirectPathForUser({
+            user: viewer.user,
+            userId: viewer.user.id,
+          })
+        : await getStudentAuthRedirectPathForUser({
+            user: viewer.user,
+            userId: viewer.user.id,
+          }),
     );
   }
 
@@ -44,6 +50,19 @@ export default async function SignInPage({
       <h1 className="mt-4 text-3xl font-semibold">Welcome back. Sign in to continue.</h1>
 
       <form action={signInAction} className="mt-8 space-y-4">
+        <div>
+          <label className="mb-2 block text-sm font-medium" htmlFor="product">
+            Exam track
+          </label>
+          <select className="input-base" defaultValue="cna" id="product" name="product">
+            <option value="cna">CNA Tutor</option>
+            <option value="ccma">CCMA Tutor</option>
+          </select>
+          <p className="text-muted mt-2 text-xs leading-6">
+            Choose the exam track tied to this account so we can send you to the right dashboard and pre-test flow.
+          </p>
+        </div>
+
         <div>
           <label className="mb-2 block text-sm font-medium" htmlFor="email">
             Email
@@ -104,7 +123,7 @@ export default async function SignInPage({
       </div>
 
       <div className="mt-8 border-t border-[var(--border)] pt-8">
-        <p className="text-center text-sm font-medium">New to CNA Tutor?</p>
+        <p className="text-center text-sm font-medium">New to CNA Tutor or CCMA Tutor?</p>
         <div className="mt-4 flex justify-center">
           <Link className="button-secondary w-full sm:w-auto" href="/sign-up">
             Create your account

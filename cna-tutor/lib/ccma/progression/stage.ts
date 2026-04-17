@@ -95,7 +95,7 @@ export function resolveStudentStage(args: {
         description:
           "Your pre-test is done. Review your ranked study plan before moving into practice.",
         nextRequiredPath: "/ccma/study-plan",
-        allowedPrefixes: ["/ccma/study-plan", "/pretest/results"],
+        allowedPrefixes: ["/ccma/study-plan", "/ccma/pretest/results"],
       },
       null,
     );
@@ -109,7 +109,7 @@ export function resolveStudentStage(args: {
         description:
           "Your pre-test is complete. Review your ranked study plan and begin with the weakest topic first.",
         nextRequiredPath: "/ccma/study-plan",
-        allowedPrefixes: ["/ccma/study-plan", "/pretest/results"],
+        allowedPrefixes: ["/ccma/study-plan", "/ccma/pretest/results"],
       },
       progression,
     );
@@ -153,7 +153,7 @@ export function resolveStudentStage(args: {
         description:
           "Keep working from weakest to strongest through your study plan and short checkpoints.",
         nextRequiredPath: progression.nextBestTask.href,
-        allowedPrefixes: ["/ccma/study-plan", "/ccma/study", "/ccma/quiz", "/mock-exam/results"],
+        allowedPrefixes: ["/ccma/study-plan", "/ccma/study", "/ccma/quiz", "/ccma/mock-exam"],
       },
       progression,
     );
@@ -209,9 +209,9 @@ async function getStudentResumableStudyPath(args: {
   userId: string;
   progression: ProgressionSnapshot;
 }) {
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
   const { data: sessions } = await supabase
-    .from("tutor_sessions")
+    .from("ccma_tutor_sessions")
     .select("id, status, last_activity_at, session_state_json")
     .eq("user_id", args.userId)
     .order("last_activity_at", { ascending: false })

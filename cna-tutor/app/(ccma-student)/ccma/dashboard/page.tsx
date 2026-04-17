@@ -2,15 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { updateLanguagePreferenceAction } from "@/app/(student)/actions";
+import { updateCcmaLanguagePreferenceAction } from "@/app/ccma/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { ProgressBar } from "@/components/dashboard/progress-bar";
 import { TrendLine } from "@/components/dashboard/trend-line";
-import { ReadinessChecklist } from "@/components/student/readiness-checklist";
+import { CcmaReadinessChecklist } from "@/components/ccma/readiness-checklist";
 import { StudentEmptyState } from "@/components/student/student-empty-state";
-import { requireViewer } from "@/lib/auth/session";
+import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import { formatConfidenceScore } from "@/lib/ccma/confidence";
-import { getStudentDashboard } from "@/lib/ccma/dashboard/student";
+import { getCcmaStudentDashboard } from "@/lib/ccma/dashboard/student";
 import {
   getLanguageLabel,
   LANGUAGE_OPTIONS,
@@ -240,7 +240,7 @@ export default async function StudentDashboardPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const viewer = await requireViewer();
+  const viewer = await requireCcmaViewer();
 
   if (!hasCompletedPretest(viewer.user)) {
     redirect("/ccma/pretest");
@@ -252,7 +252,7 @@ export default async function StudentDashboardPage({
   const text = (en: string, es: string) => pickLocalizedText(preferredLanguage, { en, es });
   const pretestScore = getPretestScore(viewer.user);
   const pretestDomainBreakdown = getPretestDomainBreakdown(viewer.user);
-  const dashboard = await getStudentDashboard({
+  const dashboard = await getCcmaStudentDashboard({
     userId: viewer.user.id,
     pretestScore,
     pretestDomainBreakdown,
@@ -265,11 +265,11 @@ export default async function StudentDashboardPage({
   const topWeakAreas = dashboard.weakAreas.slice(0, 3);
   const latestQuiz = dashboard.practicePerformance.recentScores[0] ?? null;
   const confidenceSeries = dashboard.practicePerformance.recentScores
-    .map((attempt) => attempt.confidenceScore)
-    .filter((value): value is number => typeof value === "number")
+    .map((attempt: any) => attempt.confidenceScore)
+    .filter((value: any): value is number => typeof value === "number")
     .reverse();
   const scoreSeries = dashboard.practicePerformance.recentScores
-    .map((attempt) => attempt.score)
+    .map((attempt: any) => attempt.score)
     .reverse();
   const readinessDeltaLabel = formatReadinessDelta(
     dashboard.progression.readinessScore,
@@ -410,7 +410,7 @@ export default async function StudentDashboardPage({
         >
           {topWeakAreas.length ? (
             <div className="space-y-4">
-              {topWeakAreas.map((area, index) => (
+              {topWeakAreas.map((area: any, index: number) => (
                 <article
                   key={`${area.domainId}-${area.domainSlug}`}
                   className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-4"
@@ -486,7 +486,7 @@ export default async function StudentDashboardPage({
 
           <div className="mt-5 space-y-3">
             {dashboard.studyPlanProgress.improvementHighlights.length ? (
-              dashboard.studyPlanProgress.improvementHighlights.map((highlight) => (
+              dashboard.studyPlanProgress.improvementHighlights.map((highlight: any) => (
                 <article
                   key={highlight.domainSlug}
                   className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-4"
@@ -521,7 +521,7 @@ export default async function StudentDashboardPage({
           eyebrow="Readiness Checklist"
           title="What still needs to happen before exam-ready"
         >
-          <ReadinessChecklist items={dashboard.progression.readinessChecklist} />
+          <CcmaReadinessChecklist items={dashboard.progression.readinessChecklist} />
         </DashboardSection>
 
         <DashboardSection
@@ -529,7 +529,7 @@ export default async function StudentDashboardPage({
           eyebrow="Drill Weak Areas"
           title="Run a fast weak-area drill"
           action={
-            <Link className="button-secondary w-full sm:w-auto" href="/quiz?mode=drill">
+            <Link className="button-secondary w-full sm:w-auto" href="/ccma/quiz?mode=drill">
               Drill again
             </Link>
           }
@@ -541,7 +541,7 @@ export default async function StudentDashboardPage({
             </p>
           </div>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Link className="button-primary w-full sm:w-auto" href="/quiz?mode=drill">
+            <Link className="button-primary w-full sm:w-auto" href="/ccma/quiz?mode=drill">
               Start weak-area drill
             </Link>
             <Link className="button-secondary w-full sm:w-auto" href="/ccma/study-plan">
@@ -552,14 +552,14 @@ export default async function StudentDashboardPage({
 
         {dashboard.progression.examReady ? (
           <DashboardSection
-            description="You reached the exam-ready range. Use your exam-day plan to review what to bring, what the Texas CNA testing flow looks like, and how to walk in calm."
+            description="You reached the exam-ready range. Use your exam-day plan to review what to bring, what the NHA CCMA testing flow looks like, and how to walk in calm."
             eyebrow="Exam Day"
             title="Your test-day plan is unlocked"
           >
             <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-5">
               <p className="text-sm font-semibold">What you can review now</p>
               <p className="mt-2 text-sm leading-6">
-                Open your exam-day page for the Texas CNA checklist, your readiness summary, and the final confidence message from ACAM before test day.
+                Open your exam-day page for the NHA CCMA test-day checklist, your readiness summary, and a final confidence message before test day.
               </p>
             </div>
             <div className="mt-5">
@@ -659,7 +659,7 @@ export default async function StudentDashboardPage({
 
           <div className="mt-5 space-y-3">
             {dashboard.practicePerformance.recentScores.length ? (
-              dashboard.practicePerformance.recentScores.slice(0, 3).map((attempt) => (
+              dashboard.practicePerformance.recentScores.slice(0, 3).map((attempt: any) => (
                 <article
                   key={attempt.id}
                   className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-4"
@@ -724,7 +724,7 @@ export default async function StudentDashboardPage({
             </div>
           </div>
 
-          <form action={updateLanguagePreferenceAction} className="mt-5 space-y-4">
+          <form action={updateCcmaLanguagePreferenceAction} className="mt-5 space-y-4">
             <div>
               <label className="mb-2 block text-sm font-medium" htmlFor="preferred_language">
                 {text("Choose tutor language", "Elige el idioma del tutor")}

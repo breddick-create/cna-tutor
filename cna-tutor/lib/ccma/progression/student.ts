@@ -12,106 +12,77 @@ export async function getStudentProgressionSnapshot(args: {
   pretestScore: number | null;
   pretestDomainBreakdown: PretestDomainBreakdown[];
 }) {
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
   const totalModules = listTutorLessons().length;
 
   const [
-    { data: statsRows },
-    { data: rawMasteryRows },
+    { data: rawProgressRows },
     { data: rawQuizAttempts },
-    { data: rawMockAttempts },
+    { data: rawAssessmentAttempts },
     { data: profileRow },
   ] = await Promise.all([
-    supabase.from("daily_user_stats").select("*").eq("user_id", args.userId),
     supabase
-      .from("domain_mastery")
-      .select("domain_id, mastery_score, weak_streak")
+      .from("ccma_student_progress")
+      .select("domain_slug, domain_title, mastery_score, weak_streak, lessons_completed")
       .eq("user_id", args.userId),
     supabase
-      .from("quiz_attempts")
-      .select("id, domain_id, score, total_questions, completed_at")
+      .from("ccma_quiz_attempts")
+      .select("id, domain_slug, score, total_questions, completed_at, domain_breakdown")
       .eq("user_id", args.userId)
-      .not("completed_at", "is", null)
       .order("completed_at", { ascending: false })
       .limit(6),
     supabase
-      .from("mock_exam_attempts")
-      .select("id, percent, passed, completed_at")
+      .from("ccma_assessments")
+      .select("id, mode, score, passed, completed_at")
       .eq("user_id", args.userId)
-      .not("completed_at", "is", null)
+      .eq("mode", "mock_exam")
       .order("completed_at", { ascending: false })
       .limit(6),
     supabase
       .from("profiles")
       .select("last_activity_at")
       .eq("id", args.userId)
+      .eq("product", "ccma")
       .single(),
   ]);
 
   const daysSinceActivity = profileRow?.last_activity_at
-    ? Math.floor((Date.now() - new Date(profileRow.last_activity_at).getTime()) / (1000 * 60 * 60 * 24))
+    ? Math.floor(
+        (Date.now() - new Date(profileRow.last_activity_at).getTime()) /
+          (1000 * 60 * 60 * 24),
+      )
     : null;
 
-  const totals = (statsRows ?? []).reduce(
-    (acc, row) => {
-      acc.lessonsCompleted += row.lessons_completed;
-      acc.quizzesCompleted += row.quizzes_completed;
-      acc.mockExamsCompleted += row.mock_exams_completed;
-      return acc;
-    },
-    {
-      lessonsCompleted: 0,
-      quizzesCompleted: 0,
-      mockExamsCompleted: 0,
-    },
+  const progressRows = rawProgressRows ?? [];
+  const lessonsCompleted = progressRows.reduce(
+    (sum: number, row: any) => sum + (row.lessons_completed ?? 0),
+    0,
   );
 
-  const domainIds = Array.from(
-    new Set([
-      ...(rawMasteryRows ?? []).map((row) => row.domain_id),
-      ...(rawQuizAttempts ?? [])
-        .map((attempt) => attempt.domain_id)
-        .filter((value): value is string => Boolean(value)),
-    ]),
-  );
-  const { data: storedDomains } = domainIds.length
-    ? await supabase.from("domains").select("id, slug, title").in("id", domainIds)
-    : { data: [] };
-  const domainMap = new Map((storedDomains ?? []).map((domain) => [domain.id, domain]));
+  const masteryRows = progressRows.map((row: any) => ({
+    domainSlug: row.domain_slug,
+    domainTitle: row.domain_title,
+    masteryScore: row.mastery_score,
+    weakStreak: row.weak_streak,
+  }));
 
-  const masteryRows = (rawMasteryRows ?? [])
-    .map((row) => {
-      const domain = domainMap.get(row.domain_id);
-
-      if (!domain) {
-        return null;
-      }
-
-      return {
-        domainSlug: domain.slug,
-        domainTitle: domain.title,
-        masteryScore: row.mastery_score,
-        weakStreak: row.weak_streak,
-      };
-    })
-    .filter((row): row is NonNullable<typeof row> => Boolean(row));
-
-  const quizAttempts: ProgressionQuizAttempt[] = (rawQuizAttempts ?? []).map((attempt) => {
-    const domain = attempt.domain_id ? domainMap.get(attempt.domain_id) : null;
-
-    return {
+  const quizAttempts: ProgressionQuizAttempt[] = (rawQuizAttempts ?? []).map(
+    (attempt: any) => ({
       id: attempt.id,
       score: attempt.score,
       totalQuestions: attempt.total_questions,
       completedAt: attempt.completed_at,
-      domainSlug: domain?.slug ?? null,
-      domainTitle: domain?.title ?? null,
-    };
-  });
+      domainSlug: attempt.domain_slug ?? null,
+      domainTitle:
+        attempt.domain_breakdown?.[0]?.domainTitle ?? attempt.domain_slug ?? null,
+    }),
+  );
 
-  const mockAttempts: ProgressionMockAttempt[] = (rawMockAttempts ?? []).map((attempt) => ({
+  const mockAttempts: ProgressionMockAttempt[] = (
+    rawAssessmentAttempts ?? []
+  ).map((attempt: any) => ({
     id: attempt.id,
-    percent: attempt.percent,
+    percent: attempt.score,
     passed: attempt.passed,
     completedAt: attempt.completed_at,
   }));
@@ -120,13 +91,14 @@ export async function getStudentProgressionSnapshot(args: {
     pretestScore: args.pretestScore,
     pretestDomainBreakdown: args.pretestDomainBreakdown,
     masteryRows,
-    lessonsCompleted: totals.lessonsCompleted,
-    quizzesCompleted: totals.quizzesCompleted,
-    mockExamsCompleted: totals.mockExamsCompleted,
+    lessonsCompleted,
+    quizzesCompleted: quizAttempts.length,
+    mockExamsCompleted: mockAttempts.length,
     quizAttempts,
     mockAttempts,
     totalModules,
-    daysSinceActivity: Number.isNaN(daysSinceActivity ?? NaN) ? null : daysSinceActivity,
+    daysSinceActivity: Number.isNaN(daysSinceActivity ?? NaN)
+      ? null
+      : daysSinceActivity,
   });
 }
-

@@ -2,11 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
-  TEXAS_CNA_EXAM_DAY_SOURCES,
+  CCMA_EXAM_DAY_SOURCES,
   getMostImprovedDomains,
   getStrongestDomains,
 } from "@/lib/ccma/exam-day";
-import { requireViewer } from "@/lib/auth/session";
+import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import { getStudentProgressionSnapshot } from "@/lib/ccma/progression/student";
 import { getPretestDomainBreakdown, getPretestScore, hasCompletedPretest } from "@/lib/ccma/onboarding/pretest";
 
@@ -26,7 +26,7 @@ function ExamDayCard({
 }
 
 export default async function ExamDayPage() {
-  const viewer = await requireViewer();
+  const viewer = await requireCcmaViewer();
 
   if (!hasCompletedPretest(viewer.user)) {
     redirect("/ccma/pretest");
@@ -49,9 +49,9 @@ export default async function ExamDayPage() {
     <div className="space-y-8">
       <section className="panel-strong rounded-[1.75rem] p-6">
         <p className="eyebrow">Exam Day</p>
-        <h1 className="mt-3 text-3xl font-semibold">Walk into the Texas CNA exam with a calm plan.</h1>
+        <h1 className="mt-3 text-3xl font-semibold">Walk into the NHA CCMA exam with a calm plan.</h1>
         <p className="text-muted mt-3 max-w-3xl leading-7">
-          This page opens only after you reach Exam Ready. It turns your readiness score into a practical test-day plan based on official Texas HHSC guidance and Pearson VUE test-center rules.
+          This page opens only after you reach Exam Ready. It turns your readiness score into a practical test-day plan based on official NHA CCMA guidance and PSI test-center rules.
         </p>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <Link className="button-primary w-full sm:w-auto" href="/ccma/dashboard">
@@ -70,22 +70,22 @@ export default async function ExamDayPage() {
           <div className="mt-5 space-y-4">
             <ExamDayCard title="What to bring">
               <p>
-                Bring the ID required by your test appointment and make sure the name matches your registration exactly. Keep your confirmation details handy, and review your test-center instructions before you leave home.
+                Bring the ID required by your PSI test appointment and make sure the name on your ID matches your NHA registration exactly. Keep your scheduling confirmation handy and review your test-center instructions before leaving home.
               </p>
             </ExamDayCard>
             <ExamDayCard title="Arrival timing">
               <p>
-                Plan to arrive at least 30 minutes early so check-in does not turn a prepared day into a rushed one. Give yourself extra buffer for traffic, parking, and finding the right entrance.
+                Plan to arrive at the PSI test center at least 30 minutes early so check-in does not turn a prepared day into a rushed one. Give yourself extra buffer for traffic, parking, and finding the right entrance.
               </p>
             </ExamDayCard>
-            <ExamDayCard title="What the written portion looks like">
+            <ExamDayCard title="What the NHA CCMA exam looks like">
               <p>
-                Texas nurse aide testing includes a written-or-oral knowledge exam plus a separate skills exam. Go in expecting a structured knowledge check first and a hands-on skills check that still rewards calm pacing, careful reading, and attention to steps.
+                The NHA CCMA exam is a computer-based test with 150 scored and unscored questions across 7 content domains. You have 3 hours to complete it. The exam tests knowledge and application — expect scenario-based questions alongside knowledge recall.
               </p>
             </ExamDayCard>
             <ExamDayCard title="If you do not pass">
               <p>
-                A miss on exam day is not the end of the path. Texas HHSC provides retest and retraining-and-retesting workflows through TULIP, and the exam result tells you which part to rebuild before your next attempt.
+                A miss on exam day is not the end of the path. NHA allows retakes after a waiting period. Review your score report to identify which domains need the most work, and use this tutor to target those areas before your next attempt.
               </p>
             </ExamDayCard>
           </div>
@@ -170,7 +170,7 @@ export default async function ExamDayPage() {
           Exam programs change details over time, so use these official pages to confirm logistics before your actual appointment.
         </p>
         <div className="mt-5 grid gap-3">
-          {TEXAS_CNA_EXAM_DAY_SOURCES.map((source) => (
+          {CCMA_EXAM_DAY_SOURCES.map((source) => (
             <Link
               key={source.href}
               className="button-secondary w-full justify-between"

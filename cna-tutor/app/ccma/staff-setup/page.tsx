@@ -1,39 +1,35 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { staffSetupAction } from "@/app/(auth)/actions";
-import { BrandLogo } from "@/components/brand/brand-logo";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { resolveStaffAccessToken } from "@/lib/auth/staff-access";
-import { getViewer } from "@/lib/auth/session";
-import { getStudentAuthRedirectPathForUser } from "@/lib/ccma/progression/stage";
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { getCcmaViewer } from "@/lib/ccma/auth/session";
+import { ccmaStaffSetupAction } from "@/app/ccma/actions";
+import {
+  isValidCcmaStaffAccessToken,
+  resolveCcmaStaffAccessToken,
+} from "@/lib/ccma/auth/staff-access";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-export default async function StaffSetupPage({
+export default async function CcmaStaffSetupPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  const viewer = await getViewer();
+  const viewer = await getCcmaViewer();
 
   if (viewer) {
-    if (viewer.profile.role === "admin") {
-      redirect("/ccma-admin");
-    }
-
-    redirect(
-      await getStudentAuthRedirectPathForUser({
-        user: viewer.user,
-        userId: viewer.user.id,
-      }),
-    );
+    redirect(viewer.profile.role === "admin" ? "/ccma-admin" : "/ccma/dashboard");
   }
 
   const params = await searchParams;
-  const inviteToken = resolveStaffAccessToken(params);
+  const inviteToken =
+    typeof params.code === "string"
+      ? resolveCcmaStaffAccessToken(params.code)
+      : "";
 
-  if (!inviteToken) {
+  if (!isValidCcmaStaffAccessToken(inviteToken)) {
     redirect("/ccma/sign-in");
   }
 
@@ -44,27 +40,12 @@ export default async function StaffSetupPage({
     <section className="panel-strong rounded-[2rem] p-8 sm:p-10">
       <BrandLogo className="w-[220px]" priority width={220} />
       <p className="eyebrow mt-6">Staff Setup</p>
-      <h1 className="mt-4 text-3xl font-semibold">Create your staff account.</h1>
+      <h1 className="mt-4 text-3xl font-semibold">Create your CCMA staff account.</h1>
       <p className="text-muted mt-3 leading-7">
-        Your staff invite has been confirmed. Finish your account setup to go straight to the
-        admin dashboard.
+        Your invite is valid. Finish setup to access the CCMA coordinator dashboard.
       </p>
-      <div className="mt-6 rounded-[1.5rem] border border-[var(--border)] bg-white/78 p-5">
-        <p className="text-sm font-semibold">What happens next</p>
-        <div className="mt-4 space-y-3">
-          <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/85 px-4 py-3">
-            <p className="text-sm leading-6">1. Create your staff account</p>
-          </div>
-          <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/85 px-4 py-3">
-            <p className="text-sm leading-6">2. Confirm your email if needed</p>
-          </div>
-          <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/85 px-4 py-3">
-            <p className="text-sm leading-6">3. Go straight to the admin dashboard</p>
-          </div>
-        </div>
-      </div>
 
-      <form action={staffSetupAction} className="mt-8 space-y-4">
+      <form action={ccmaStaffSetupAction} className="mt-8 space-y-4">
         <input name="invite_token" type="hidden" value={inviteToken} />
 
         <div>
@@ -130,18 +111,10 @@ export default async function StaffSetupPage({
         <Link className="font-semibold text-[color:var(--brand-strong)]" href="/ccma/sign-in">
           Back to sign in
         </Link>
-        <Link className="font-semibold text-[color:var(--brand-strong)]" href="/ccma/support">
+        <Link className="font-semibold text-[color:var(--brand-strong)]" href="/support">
           Need help?
-        </Link>
-        <Link className="font-semibold text-[color:var(--brand-strong)]" href="/ccma/privacy">
-          Privacy
-        </Link>
-        <Link className="font-semibold text-[color:var(--brand-strong)]" href="/ccma/security">
-          Security
         </Link>
       </div>
     </section>
   );
 }
-
-

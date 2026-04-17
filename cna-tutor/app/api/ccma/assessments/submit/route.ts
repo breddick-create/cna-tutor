@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getViewer } from "@/lib/auth/session";
+import { getCcmaViewer } from "@/lib/ccma/auth/session";
 import {
   getPretestDomainBreakdown,
   getPretestScore,
@@ -32,7 +32,7 @@ const submitAssessmentSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const viewer = await getViewer();
+  const viewer = await getCcmaViewer();
 
   if (!viewer) {
     return NextResponse.json({ error: "Please sign in to continue." }, { status: 401 });

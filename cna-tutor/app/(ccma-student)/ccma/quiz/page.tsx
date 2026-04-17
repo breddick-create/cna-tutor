@@ -1,21 +1,21 @@
 import Link from "next/link";
 
-import { AssessmentRunner } from "@/components/exams/assessment-runner";
+import { AssessmentRunner } from "@/components/ccma/assessment-runner";
 import { StudentEmptyState } from "@/components/student/student-empty-state";
-import { requireViewer } from "@/lib/auth/session";
-import { getAssessmentQuestions } from "@/lib/ccma/exams/bank";
+import { requireCcmaViewer } from "@/lib/ccma/auth/session";
+import { getAssessmentQuestions, listExamDomains } from "@/lib/ccma/exams/bank";
 import { pickLocalizedText, resolvePreferredLanguage } from "@/lib/ccma/i18n/languages";
 import { getPretestDomainBreakdown, getPretestScore } from "@/lib/ccma/onboarding/pretest";
 import { getStudentProgressionSnapshot } from "@/lib/ccma/progression/student";
 
-type SearchParams = Promise<{ mode?: string }>;
+type SearchParams = Promise<{ mode?: string; domain?: string }>;
 
 export default async function QuizPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  const viewer = await requireViewer();
+  const viewer = await requireCcmaViewer();
   const language = resolvePreferredLanguage(viewer.profile.preferred_language);
   const text = (en: string, es: string) => pickLocalizedText(language, { en, es });
   const params = await searchParams;
@@ -28,16 +28,28 @@ export default async function QuizPage({
   const assignedWeakArea = progression.topWeakAreas[0] ?? null;
   const isWeakAreaDrill = params.mode === "drill";
   const drillDomains = progression.topWeakAreas.slice(0, 3);
+  const selectedDomain =
+    listExamDomains().find((domain) => domain.slug === params.domain) ?? null;
+  const rankedMatch = selectedDomain
+    ? progression.rankedDomains.find((domain) => domain.domainSlug === selectedDomain.slug) ?? null
+    : null;
+  const chosenDomain =
+    !isWeakAreaDrill && selectedDomain
+      ? {
+          domainSlug: selectedDomain.slug,
+          domainTitle: selectedDomain.title,
+          masteryScore: rankedMatch?.masteryScore ?? 0,
+          recommendation:
+            rankedMatch?.recommendation ??
+            "Use this quiz to check whether the guided lesson is sticking before you move on.",
+        }
+      : assignedWeakArea;
 
-  if (!assignedWeakArea) {
+  if (!chosenDomain && !isWeakAreaDrill) {
     return (
       <div className="space-y-8">
         <section className="panel rounded-[1.75rem] p-6">
-          <p className="eyebrow">
-            {isWeakAreaDrill
-              ? text("Weak-Area Drill", "Practica de areas debiles")
-              : text("Practice Quiz", "Quiz de practica")}
-          </p>
+          <p className="eyebrow">{text("Practice Quiz", "Quiz de practica")}</p>
           <h1 className="mt-3 text-3xl font-semibold">
             {text(
               "Your weak-area quizzes are under control.",
@@ -81,7 +93,7 @@ export default async function QuizPage({
         undefined,
         drillDomains.map((area) => area.domainSlug),
       )
-    : getAssessmentQuestions("quiz", assignedWeakArea.domainSlug);
+    : getAssessmentQuestions("quiz", chosenDomain?.domainSlug);
 
   return (
     <div className="space-y-8">
@@ -111,19 +123,8 @@ export default async function QuizPage({
                     "Esta practica de 10 preguntas toma solo tus 3 areas debiles principales para que obtengas repeticion enfocada donde mas la necesita tu preparacion.",
                   )
                 : text(
-                    "This quiz is assigned automatically from your highest-priority weak area so you can check the topic that matters most before moving on.",
-                    "Este quiz se asigna automaticamente desde tu area debil de mayor prioridad para que revises el tema que mas importa antes de avanzar.",
-                  )}
-            </p>
-            <p className="mt-3 max-w-3xl text-sm font-medium leading-7">
-              {isWeakAreaDrill
-                ? text(
-                    "Next step: finish the drill, compare each weak area to your pre-test baseline, and repeat until the scores feel steadier.",
-                    "Siguiente paso: termina la practica, compara cada area debil con tu base de la preevaluacion y repitela hasta que los puntajes se sientan mas estables.",
-                  )
-                : text(
-                    "Next step: finish this quiz, review the result, and then either return to the module or move forward to the next checkpoint.",
-                    "Siguiente paso: termina este quiz, revisa el resultado y luego vuelve al modulo o avanza al siguiente punto de control.",
+                    "This quiz is assigned from the domain that most needs the next checkpoint so you can verify the topic that matters before moving on.",
+                    "Este quiz se asigna desde el dominio que mas necesita el siguiente punto de control para que verifiques el tema que importa antes de avanzar.",
                   )}
             </p>
           </div>
@@ -150,14 +151,14 @@ export default async function QuizPage({
           ) : (
             <>
               <p className="text-sm font-semibold">{text("Assigned topic", "Tema asignado")}</p>
-              <p className="mt-2 text-lg font-semibold">{assignedWeakArea.domainTitle}</p>
+              <p className="mt-2 text-lg font-semibold">{chosenDomain?.domainTitle}</p>
               <p className="text-muted mt-2 text-sm leading-6">
                 {text(
-                  `Current mastery: ${assignedWeakArea.masteryScore}%. This topic is still one of the biggest readiness blockers, so it comes first.`,
-                  `Dominio actual: ${assignedWeakArea.masteryScore}%. Este tema sigue siendo uno de los mayores bloqueos para tu preparacion, por eso va primero.`,
+                  `Current mastery: ${chosenDomain?.masteryScore ?? 0}%. This topic is still one of the biggest readiness blockers, so it comes first.`,
+                  `Dominio actual: ${chosenDomain?.masteryScore ?? 0}%. Este tema sigue siendo uno de los mayores bloqueos para tu preparacion, por eso va primero.`,
                 )}
               </p>
-              <p className="mt-3 text-sm leading-6">{assignedWeakArea.recommendation}</p>
+              <p className="mt-3 text-sm leading-6">{chosenDomain?.recommendation}</p>
             </>
           )}
         </div>
@@ -167,7 +168,7 @@ export default async function QuizPage({
         confidencePrompt={{
           topicLabel: isWeakAreaDrill
             ? drillDomains.map((area) => area.domainTitle).join(", ")
-            : assignedWeakArea.domainTitle,
+            : (chosenDomain?.domainTitle ?? "this topic"),
         }}
         description={
           isWeakAreaDrill
@@ -176,22 +177,23 @@ export default async function QuizPage({
                 `Esta practica de 10 preguntas mezcla ${drillDomains.map((area) => area.domainTitle).join(", ")}. Usa el resultado para ver como se compara cada area debil con tu base de la preevaluacion y practica otra vez si necesitas otra ronda.`,
               )
             : text(
-                `This 10-question check focuses on ${assignedWeakArea.domainTitle}. Answer honestly, then use the result to decide whether to review this topic again or move ahead in your study plan.`,
-                `Esta revision de 10 preguntas se enfoca en ${assignedWeakArea.domainTitle}. Responde con honestidad y luego usa el resultado para decidir si debes repasar este tema otra vez o avanzar en tu plan de estudio.`,
+                `This 10-question check focuses on ${chosenDomain?.domainTitle ?? "this domain"}. Answer honestly, then use the result to decide whether to review this topic again or move ahead in your study plan.`,
+                `Esta revision de 10 preguntas se enfoca en ${chosenDomain?.domainTitle ?? "este dominio"}. Responde con honestidad y luego usa el resultado para decidir si debes repasar este tema otra vez o avanzar en tu plan de estudio.`,
               )
         }
-        domainSlug={isWeakAreaDrill ? undefined : assignedWeakArea.domainSlug}
+        domainSlug={isWeakAreaDrill ? undefined : chosenDomain?.domainSlug}
         domainSlugs={isWeakAreaDrill ? drillDomains.map((area) => area.domainSlug) : undefined}
         mode={isWeakAreaDrill ? "weak_area_drill" : "quiz"}
         questions={questions}
         title={
           isWeakAreaDrill
             ? text("Weak-area drill", "Practica de areas debiles")
-            : text(`${assignedWeakArea.domainTitle} quiz`, `Quiz de ${assignedWeakArea.domainTitle}`)
+            : text(
+                `${chosenDomain?.domainTitle ?? "Assigned domain"} quiz`,
+                `Quiz de ${chosenDomain?.domainTitle ?? "dominio asignado"}`,
+              )
         }
       />
     </div>
   );
 }
-
-

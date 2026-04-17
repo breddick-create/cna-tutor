@@ -1,4 +1,4 @@
-import { texasCnaDomains } from "@/content/texas-cna/domains";
+import { ccmaDomains } from "@/content/ccma/domains";
 import { getLessonByDomain } from "@/lib/ccma/tutor/lessons";
 
 import type { PretestDomainBreakdown } from "@/lib/ccma/onboarding/pretest";
@@ -77,7 +77,7 @@ export function buildPretestResultsViewModel(args: {
 }): PretestResultsViewModel {
   const mappedDomains = args.breakdown
     .map((domain) => {
-      const domainMeta = texasCnaDomains.find((item) => item.slug === domain.domainSlug);
+      const domainMeta = ccmaDomains.find((item) => item.slug === domain.domainSlug);
       const lesson = getLessonByDomain(domain.domainSlug)[0] ?? null;
       const priorityLabel =
         domain.percent < 60 ? "Start first" : domain.percent < PRIORITY_THRESHOLD ? "Build next" : "Maintain";

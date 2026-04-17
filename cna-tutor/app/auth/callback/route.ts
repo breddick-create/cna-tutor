@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { getStudentAuthRedirectPathForUser as getCcmaStudentAuthRedirectPathForUser } from "@/lib/ccma/progression/stage";
+import { resolveProductFromMetadata } from "@/lib/auth/session";
 import { getStudentAuthRedirectPathForUser } from "@/lib/progression/stage";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,6 +13,24 @@ function buildSignInRedirect(requestUrl: URL, message: string) {
 
 function shouldHonorRequestedNext(next: string | null) {
   return next === "/reset-password";
+}
+
+async function getStudentRedirect(args: {
+  product: "cna" | "ccma";
+  user: Parameters<typeof getStudentAuthRedirectPathForUser>[0]["user"];
+  userId: string;
+}) {
+  if (args.product === "ccma") {
+    return getCcmaStudentAuthRedirectPathForUser({
+      user: args.user,
+      userId: args.userId,
+    });
+  }
+
+  return getStudentAuthRedirectPathForUser({
+    user: args.user,
+    userId: args.userId,
+  });
 }
 
 export async function GET(request: Request) {
@@ -46,11 +66,23 @@ export async function GET(request: Request) {
     }
 
     if (user) {
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("product")
+        .eq("id", user.id)
+        .maybeSingle();
+      const product =
+        existingProfile?.product === "ccma"
+          ? "ccma"
+          : resolveProductFromMetadata(user.user_metadata?.product);
       next = shouldHonorRequestedNext(requestedNext)
         ? requestedNext ?? "/reset-password"
         : user.user_metadata?.role === "admin"
-          ? "/admin"
-          : await getStudentAuthRedirectPathForUser({
+          ? product === "ccma"
+            ? "/ccma-admin"
+            : "/admin"
+          : await getStudentRedirect({
+              product,
               user,
               userId: user.id,
             });

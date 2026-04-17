@@ -235,6 +235,7 @@ export type Database = {
         Row: {
           id: string;
           role: "student" | "admin";
+          product: "cna" | "ccma";
           full_name: string;
           email: string;
           cohort: string | null;
@@ -248,6 +249,7 @@ export type Database = {
         Insert: {
           id: string;
           role?: "student" | "admin";
+          product?: "cna" | "ccma";
           full_name: string;
           email: string;
           cohort?: string | null;
@@ -261,6 +263,7 @@ export type Database = {
         Update: {
           id?: string;
           role?: "student" | "admin";
+          product?: "cna" | "ccma";
           full_name?: string;
           email?: string;
           cohort?: string | null;

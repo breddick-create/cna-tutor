@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { LanguageProvider } from "@/components/ccma/language-context";
-import { requireViewer } from "@/lib/auth/session";
+import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import {
   pickLocalizedText,
   resolvePreferredLanguage,
@@ -70,7 +70,7 @@ export default async function StudentLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const viewer = await requireViewer();
+  const viewer = await requireCcmaViewer();
 
   if (viewer.profile.role === "admin") {
     redirect("/ccma-admin");
@@ -108,8 +108,8 @@ export default async function StudentLayout({
         })}
         subtitle={getStageDescription(preferredLanguage, stage.stage)}
         title={pickLocalizedText(preferredLanguage, {
-          en: "CNA Tutor",
-          es: "CNA Tutor",
+          en: "CCMA Tutor",
+          es: "CCMA Tutor",
         })}
       >
         {children}

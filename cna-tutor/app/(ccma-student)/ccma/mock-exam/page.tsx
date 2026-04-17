@@ -1,16 +1,16 @@
 import Link from "next/link";
 
+import { AssessmentRunner } from "@/components/ccma/assessment-runner";
 import {
-  buildMockExamStartHref,
   formatExamTime,
   getMockExamTimeLimitSeconds,
 } from "@/lib/ccma/exams/mock-flow";
-import { requireViewer } from "@/lib/auth/session";
+import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import { getAssessmentQuestions, listExamDomains } from "@/lib/ccma/exams/bank";
 import { getPretestDomainBreakdown, getPretestScore } from "@/lib/ccma/onboarding/pretest";
 import { getStudentProgressionSnapshot } from "@/lib/ccma/progression/student";
 
-type SearchParams = Promise<{ domain?: string }>;
+type SearchParams = Promise<{ domain?: string; start?: string }>;
 
 function PracticeExamRequirementItem({
   complete,
@@ -46,7 +46,7 @@ export default async function MockExamPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const viewer = await requireViewer();
+  const viewer = await requireCcmaViewer();
   const resolvedSearchParams = await searchParams;
   const pretestScore = getPretestScore(viewer.user);
   const pretestDomainBreakdown = getPretestDomainBreakdown(viewer.user);
@@ -61,6 +61,7 @@ export default async function MockExamPage({
   const questions = getAssessmentQuestions("mock_exam", selectedDomain?.slug);
   const questionCount = questions.length;
   const fullTest = !selectedDomain;
+  const shouldStart = resolvedSearchParams.start === "1";
   const timeLimitSeconds = getMockExamTimeLimitSeconds({
     questionCount,
     fullTest,
@@ -91,10 +92,7 @@ export default async function MockExamPage({
             <p className="text-muted mt-3 max-w-3xl leading-7">
               {selectedDomain
                 ? `This section mock stays inside ${selectedDomain.title}. Use it after guided study and the 10-question quiz when you want a stronger check before you move on.`
-                : "This full mock is meant to feel more like the real written exam. It helps you decide whether to keep studying or move closer to exam day with confidence."}
-            </p>
-            <p className="mt-3 max-w-3xl text-sm font-medium leading-7">
-              Next step: {selectedDomain ? "finish this section check and use the result to decide whether this topic is ready." : "finish this full practice exam and use the result to decide whether to keep studying or move closer to exam day."}
+                : "This full mock is meant to feel more like the real NHA CCMA written exam. It helps you decide whether to keep studying or move closer to exam day with confidence."}
             </p>
           </div>
           <Link className="button-secondary w-full sm:w-auto" href="/ccma/dashboard">
@@ -138,19 +136,13 @@ export default async function MockExamPage({
           <p className="text-muted mt-3 max-w-3xl leading-7">
             {progression.practiceExamGateReason}
           </p>
-          <p className="text-muted mt-3 max-w-3xl text-sm leading-7">
-            That does not mean you are off track. It just means the app wants a little more lesson
-            and quiz evidence before using the strongest readiness check.
-          </p>
-          <p className="mt-3 text-sm font-medium leading-7">
-            Next step: continue the study plan or take a practice quiz in your weakest topic.
-          </p>
           <div className="mt-6 rounded-[1.5rem] border border-[rgba(217,111,50,0.18)] bg-[rgba(255,249,243,0.92)] p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold">Unlock requirements</p>
                 <p className="mt-2 text-sm leading-6">
-                  To unlock the full practice exam, complete: (1) at least 2 guided lessons, (2) at least 1 quiz with a score of 60% or higher.
+                  To unlock the full practice exam, complete: (1) at least 2 guided lessons, (2)
+                  at least 1 quiz with a score of 60% or higher.
                 </p>
               </div>
               <span className="rounded-full bg-[rgba(217,111,50,0.16)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[color:#9a4f17]">
@@ -168,32 +160,32 @@ export default async function MockExamPage({
               />
             </div>
           </div>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-4">
-              <p className="text-sm font-semibold">Guided lessons finished</p>
-              <p className="mt-2 text-2xl font-semibold">{progression.signals.lessonsCompleted}</p>
-            </div>
-            <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-4">
-              <p className="text-sm font-semibold">Quizzes finished</p>
-              <p className="mt-2 text-2xl font-semibold">{progression.signals.quizzesCompleted}</p>
-            </div>
-            <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-4">
-              <p className="text-sm font-semibold">Your current score</p>
-              <p className="mt-2 text-2xl font-semibold">{progression.readinessScore}%</p>
-            </div>
-          </div>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Link className="button-primary w-full sm:w-auto" href="/ccma/study-plan">
               Continue study plan
             </Link>
-            <Link
-              className="button-secondary w-full sm:w-auto"
-              href={progression.priorityOrder[0]?.domainSlug ? `/ccma/quiz?domain=${progression.priorityOrder[0].domainSlug}` : "/ccma/quiz"}
-            >
+            <Link className="button-secondary w-full sm:w-auto" href="/ccma/quiz">
               Take practice quiz
             </Link>
           </div>
         </section>
+      ) : shouldStart ? (
+        <AssessmentRunner
+          description={
+            selectedDomain
+              ? `This timed section mock stays inside ${selectedDomain.title}. Use it to confirm whether this domain is ready to hold up under a longer check.`
+              : "This full 50-question CCMA mock is your strongest readiness checkpoint. Finish it in one sitting if you can and use the result to decide what comes next."
+          }
+          domainSlug={selectedDomain?.slug}
+          mode="mock_exam"
+          questions={questions}
+          timeLimitSeconds={timeLimitSeconds}
+          title={
+            selectedDomain
+              ? `${selectedDomain.title} section mock`
+              : "Full CCMA practice exam"
+          }
+        />
       ) : (
         <section className="space-y-6">
           <section className="panel rounded-[1.75rem] p-5 sm:p-6">
@@ -229,64 +221,20 @@ export default async function MockExamPage({
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Link
                 className={`w-full sm:w-auto ${fullTest ? "button-primary animate-[pulse_2.4s_ease-in-out_1]" : "button-primary"}`}
-                href={buildMockExamStartHref(selectedDomain?.slug)}
+                href={
+                  selectedDomain
+                    ? `/ccma/mock-exam?domain=${selectedDomain.slug}&start=1`
+                    : "/ccma/mock-exam?start=1"
+                }
               >
                 {selectedDomain ? "Start section practice exam" : "Start full practice exam"}
               </Link>
-              <Link className="button-secondary w-full sm:w-auto" href={selectedDomain?.slug ? `/ccma/quiz?domain=${selectedDomain.slug}` : "/ccma/study-plan"}>
+              <Link
+                className="button-secondary w-full sm:w-auto"
+                href={selectedDomain?.slug ? `/ccma/quiz?domain=${selectedDomain.slug}` : "/ccma/study-plan"}
+              >
                 {selectedDomain ? "Take section quiz first" : "Back to study plan"}
               </Link>
-            </div>
-          </section>
-
-          {fullTest ? (
-            <section className="rounded-[1.75rem] border border-[rgba(28,124,104,0.34)] bg-[linear-gradient(135deg,rgba(231,248,243,0.96),rgba(244,252,249,0.96))] p-5 shadow-[0_18px_36px_rgba(28,124,104,0.14)] transition-all duration-500 sm:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="eyebrow text-[color:#145f50]">Unlocked</p>
-                  <h2 className="mt-3 text-2xl font-semibold">Your full practice exam is ready.</h2>
-                  <p className="mt-3 max-w-3xl text-sm leading-7 text-[color:#145f50]">
-                    You met both unlock requirements. This is your moment to use the full mock as a real readiness check.
-                  </p>
-                </div>
-                <span className="rounded-full bg-[rgba(28,124,104,0.18)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[color:#145f50]">
-                  Ready
-                </span>
-              </div>
-              <div className="mt-4 space-y-3">
-                <PracticeExamRequirementItem
-                  complete
-                  label={`Guided lessons: ${Math.min(progression.signals.lessonsCompleted, lessonsRequired)}/${lessonsRequired} completed`}
-                />
-                <PracticeExamRequirementItem
-                  complete
-                  label={`Qualifying quizzes (60%+): ${Math.min(qualifyingQuizCount, qualifyingQuizRequired)}/${qualifyingQuizRequired} completed`}
-                />
-              </div>
-            </section>
-          ) : null}
-
-          <section className="panel rounded-[1.75rem] p-5 sm:p-6">
-            <p className="eyebrow">Why This Matters</p>
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
-              <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-4">
-                <p className="text-sm font-semibold">1. Measure</p>
-                <p className="text-muted mt-2 text-sm leading-6">
-                  This is more than a quiz. It shows whether your study work still holds up in a longer check.
-                </p>
-              </div>
-              <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-4">
-                <p className="text-sm font-semibold">2. Diagnose</p>
-                <p className="text-muted mt-2 text-sm leading-6">
-                  The result will show which categories need another pass before you rely on final readiness signals.
-                </p>
-              </div>
-              <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-4">
-                <p className="text-sm font-semibold">3. Decide</p>
-                <p className="text-muted mt-2 text-sm leading-6">
-                  Strong performance can move readiness up. Low performance sends you back to the right review instead of guesswork.
-                </p>
-              </div>
             </div>
           </section>
         </section>
@@ -294,5 +242,3 @@ export default async function MockExamPage({
     </div>
   );
 }
-
-

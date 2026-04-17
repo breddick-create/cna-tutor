@@ -4,9 +4,14 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { isValidStaffAccessToken } from "@/lib/auth/staff-access";
-import { ensureProfileForUser } from "@/lib/auth/session";
+import {
+  ensureProfileForUser,
+  resolveProductFromMetadata,
+  resolveProductFromProfile,
+} from "@/lib/auth/session";
 import { resolveAppUrl } from "@/lib/app-url";
 import { env } from "@/lib/env";
+import { getStudentAuthRedirectPathForUser as getCcmaStudentAuthRedirectPathForUser } from "@/lib/ccma/progression/stage";
 import { resolvePreferredLanguage } from "@/lib/i18n/languages";
 import { getStudentAuthRedirectPathForUser } from "@/lib/progression/stage";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -47,9 +52,28 @@ function getFriendlyStaffSetupMessage(message: string) {
   return "We couldn't create the staff account. Check the information and try again.";
 }
 
+async function getRedirectPathForStudent(args: {
+  product: "cna" | "ccma";
+  user: Parameters<typeof getStudentAuthRedirectPathForUser>[0]["user"];
+  userId: string;
+}) {
+  if (args.product === "ccma") {
+    return getCcmaStudentAuthRedirectPathForUser({
+      user: args.user,
+      userId: args.userId,
+    });
+  }
+
+  return getStudentAuthRedirectPathForUser({
+    user: args.user,
+    userId: args.userId,
+  });
+}
+
 export async function signInAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const selectedProduct = formData.get("product") === "ccma" ? "ccma" : "cna";
 
   if (!email || !password) {
     redirect(buildRedirect("/sign-in", "Enter your email and password."));
@@ -66,28 +90,37 @@ export async function signInAction(formData: FormData) {
   }
 
   if (user) {
-    const profile = await ensureProfileForUser(user, supabase);
+    const admin = createAdminClient();
+    await admin.auth.admin.updateUserById(user.id, {
+      user_metadata: {
+        ...user.user_metadata,
+        product: selectedProduct,
+      },
+    });
+
+    const profile = await ensureProfileForUser(user, supabase, { product: selectedProduct });
 
     if (!profile) {
       redirect(buildRedirect("/sign-in", "We couldn't load your profile. Please try again."));
     }
 
     const now = new Date().toISOString();
-    const admin = createAdminClient();
 
     await admin
       .from("profiles")
       .update({
+        product: selectedProduct,
         last_login_at: now,
         last_activity_at: now,
       })
       .eq("id", user.id);
 
     if (profile.role === "admin") {
-      redirect("/admin");
+      redirect(selectedProduct === "ccma" ? "/ccma-admin" : "/admin");
     }
 
-    const redirectPath = await getStudentAuthRedirectPathForUser({
+    const redirectPath = await getRedirectPathForStudent({
+      product: selectedProduct,
       user,
       userId: user.id,
     });
@@ -104,6 +137,7 @@ export async function signUpAction(formData: FormData) {
   const fullName = String(formData.get("full_name") ?? "").trim();
   const cohort = String(formData.get("cohort") ?? "").trim();
   const preferredLanguage = resolvePreferredLanguage(formData.get("preferred_language"));
+  const product = formData.get("product") === "ccma" ? "ccma" : "cna";
   const headerStore = await headers();
   const appUrl = resolveAppUrl(headerStore);
 
@@ -125,6 +159,7 @@ export async function signUpAction(formData: FormData) {
         cohort,
         preferred_language: preferredLanguage,
         role: "student",
+        product,
       },
     },
   });
@@ -134,12 +169,21 @@ export async function signUpAction(formData: FormData) {
   }
 
   if (signUpData.user) {
-    await ensureProfileForUser(signUpData.user, supabase);
+    await ensureProfileForUser(signUpData.user, supabase, { product });
+    await createAdminClient()
+      .from("profiles")
+      .update({
+        product,
+        cohort: cohort || null,
+        preferred_language: preferredLanguage,
+      })
+      .eq("id", signUpData.user.id);
   }
 
   if (signUpData.session && signUpData.user) {
     redirect(
-      await getStudentAuthRedirectPathForUser({
+      await getRedirectPathForStudent({
+        product: resolveProductFromMetadata(signUpData.user.user_metadata?.product),
         user: signUpData.user,
         userId: signUpData.user.id,
       }),
@@ -205,7 +249,7 @@ export async function staffSetupAction(formData: FormData) {
   }
 
   if (signUpData.user) {
-    await ensureProfileForUser(signUpData.user, supabase);
+    await ensureProfileForUser(signUpData.user, supabase, { product: "cna" });
   }
 
   if (signUpData.session) {

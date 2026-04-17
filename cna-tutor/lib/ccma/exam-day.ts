@@ -1,21 +1,21 @@
 import type { ProgressionSnapshot } from "@/lib/ccma/progression/readiness";
 
-export const TEXAS_CNA_EXAM_DAY_SOURCES = [
+export const CCMA_EXAM_DAY_SOURCES = [
   {
-    label: "Texas HHSC TULIP nurse aide examination application guide",
-    href: "https://apps.hhs.texas.gov/training/cbt/CNA/TULIP/TULIP_NA6.html",
+    label: "NHA CCMA exam candidate handbook",
+    href: "https://www.nhanow.com/certifications/clinical-medical-assistant",
   },
   {
-    label: "Pearson VUE exam resources and test-day guidance",
-    href: "https://www.pearsonvue.com/us/en/test-takers/resources.html",
+    label: "NHA PSI exam scheduling and test-center guide",
+    href: "https://candidate.psiexams.com/",
   },
   {
-    label: "Texas HHSC renewal, retraining, and retesting workflow",
-    href: "https://www.hhs.texas.gov/sites/default/files/documents/cna-renewal-retraining-retesting.pdf",
+    label: "NHA CCMA exam blueprint and content outline",
+    href: "https://www.nhanow.com/docs/default-source/exam-outlines/ccma-exam-outline.pdf",
   },
   {
-    label: "Credentia retest guidance for written/oral and skills exams",
-    href: "https://help.credentia.com/en/article/retest-1",
+    label: "NHA candidate resources and study tools",
+    href: "https://www.nhanow.com/resources/candidates",
   },
 ] as const;
 
@@ -38,5 +38,3 @@ export function getStrongestDomains(progression: ProgressionSnapshot) {
     .sort((a, b) => b.masteryScore - a.masteryScore || a.domainTitle.localeCompare(b.domainTitle))
     .slice(0, 3);
 }
-
-

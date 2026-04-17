@@ -25,15 +25,15 @@ export default function PrivacyPage() {
 
         <section className="panel rounded-[2rem] p-8">
           <p className="eyebrow">Privacy</p>
-          <h1 className="mt-4 text-4xl font-semibold">How CNA Tutor handles student data.</h1>
+          <h1 className="mt-4 text-4xl font-semibold">How CCMA Tutor handles student data.</h1>
           <div className="text-muted mt-6 space-y-5 leading-8">
             <p>
-              CNA Tutor stores account details, study activity, assessment results, and progress
+              CCMA Tutor stores account details, study activity, assessment results, and progress
               information so students can get the right support and authorized staff can track progress.
             </p>
             <p>
-              Students see only their own study progress. Admin views are for authorized ACAM
-              program staff who need reporting, engagement visibility, and student follow-up.
+              Students see only their own study progress. Admin views are for authorized program
+              staff who need reporting, engagement visibility, and student follow-up.
             </p>
             <p>
               Passwords are handled through the secure sign-in provider and are not shown to staff
@@ -46,7 +46,7 @@ export default function PrivacyPage() {
                   {env.supportEmail}
                 </a>
               ) : (
-                "your ACAM program administrator"
+                "your program administrator"
               )}{" "}
               for the current privacy and retention guidance.
             </p>

@@ -1,5 +1,5 @@
-import { getViewer } from "@/lib/auth/session";
-import { getAdminDashboard } from "@/lib/ccma/dashboard/admin";
+import { getCcmaViewer } from "@/lib/ccma/auth/session";
+import { getCcmaAdminDashboard } from "@/lib/ccma/dashboard/admin";
 
 function escapeCsv(value: string | number) {
   const stringValue = String(value);
@@ -12,7 +12,7 @@ function escapeCsv(value: string | number) {
 }
 
 export async function GET(request: Request) {
-  const viewer = await getViewer();
+  const viewer = await getCcmaViewer();
 
   if (!viewer || viewer.profile.role !== "admin") {
     return new Response("Unauthorized", { status: 401 });
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
 
-  const dashboard = await getAdminDashboard({
+  const dashboard = await getCcmaAdminDashboard({
     from: searchParams.get("from") ?? undefined,
     to: searchParams.get("to") ?? undefined,
     cohort: searchParams.get("cohort") ?? undefined,
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     "Readiness Score",
   ];
 
-  const rows = dashboard.participantRows.map((row) =>
+  const rows = dashboard.participantRows.map((row: any) =>
     [
       row.name,
       row.cohort,

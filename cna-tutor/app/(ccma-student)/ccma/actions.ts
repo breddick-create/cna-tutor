@@ -125,6 +125,7 @@ export async function signUpAction(formData: FormData) {
         cohort,
         preferred_language: preferredLanguage,
         role: "student",
+        product: "ccma",
       },
     },
   });
@@ -196,6 +197,7 @@ export async function staffSetupAction(formData: FormData) {
       data: {
         full_name: fullName,
         role: "admin",
+        product: "ccma",
       },
     },
   });

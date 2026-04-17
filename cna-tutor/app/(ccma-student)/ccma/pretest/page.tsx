@@ -1,17 +1,21 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-import { signOutAction } from "@/app/(auth)/actions";
-import { requireViewer } from "@/lib/auth/session";
+import { signOutAction } from "@/app/(ccma-student)/ccma/actions";
+import { AssessmentRunner } from "@/components/ccma/assessment-runner";
+import { requireCcmaViewer } from "@/lib/ccma/auth/session";
+import { getAssessmentQuestions } from "@/lib/ccma/exams/bank";
+import { hasCompletedPretest } from "@/lib/ccma/onboarding/pretest";
 
 const expectationCards = [
   {
     title: "Why this matters",
     description:
-      "The pre-test decides where your study plan starts, so you can focus on the areas that need the most help first.",
+      "The pre-test decides where your study plan starts, so you can focus on the CCMA domains that need the most help first.",
   },
   {
     title: "How long it takes",
-    description: "Plan for about 10 to 15 minutes from start to finish.",
+    description: "Plan for about 15 to 20 minutes from start to finish.",
   },
   {
     title: "How to approach it",
@@ -21,13 +25,19 @@ const expectationCards = [
 ];
 
 const nextSteps = [
-  "Your results will show which Texas CNA topics already look stronger and which ones need more help.",
+  "Your results will show which CCMA domains already look stronger and which ones need more help.",
   "The app will build your personalized study plan automatically.",
-  "You will know which lesson, quiz, or review step to do first.",
+  "You will know which lesson, quiz, or section mock to do first.",
 ];
 
-export default async function PretestIntroPage() {
-  await requireViewer();
+export default async function PretestPage() {
+  const viewer = await requireCcmaViewer();
+
+  if (hasCompletedPretest(viewer.user)) {
+    redirect("/ccma/pretest/results");
+  }
+
+  const questions = getAssessmentQuestions("pretest");
 
   return (
     <div className="space-y-8">
@@ -38,7 +48,7 @@ export default async function PretestIntroPage() {
         </h1>
         <p className="text-muted mt-4 max-w-3xl leading-7">
           This first step is here to help, not to judge. The pre-test is designed to identify your
-          strengths and weak areas so CNA Tutor can guide you with more structure and confidence.
+          strengths and weak areas so CCMA Tutor can guide you with more structure and confidence.
         </p>
         <p className="text-muted mt-3 max-w-3xl text-sm leading-7">
           You will see what to study first as soon as this is done. If you need to stop, you can
@@ -48,10 +58,7 @@ export default async function PretestIntroPage() {
 
       <section className="grid gap-4 lg:grid-cols-3">
         {expectationCards.map((card) => (
-          <article
-            key={card.title}
-            className="panel rounded-[1.5rem] p-5"
-          >
+          <article key={card.title} className="panel rounded-[1.5rem] p-5">
             <p className="text-sm font-semibold">{card.title}</p>
             <p className="text-muted mt-3 text-sm leading-6">{card.description}</p>
           </article>
@@ -82,7 +89,7 @@ export default async function PretestIntroPage() {
             you should follow next.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <Link className="button-primary flex-1" href="/pretest/start">
+            <Link className="button-primary flex-1" href="#ccma-pretest-runner">
               Start Pre-Test Now
             </Link>
             <form action={signOutAction} className="sm:flex-1">
@@ -98,7 +105,7 @@ export default async function PretestIntroPage() {
           <div className="mt-4 space-y-4">
             <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/78 p-4">
               <p className="text-sm font-semibold">Estimated time</p>
-              <p className="text-muted mt-2 text-sm leading-6">About 10 to 15 minutes.</p>
+              <p className="text-muted mt-2 text-sm leading-6">About 15 to 20 minutes.</p>
             </div>
             <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/78 p-4">
               <p className="text-sm font-semibold">Best way to answer</p>
@@ -130,7 +137,15 @@ export default async function PretestIntroPage() {
           </div>
         </div>
       </section>
+
+      <section id="ccma-pretest-runner">
+        <AssessmentRunner
+          description="Answer each question honestly so your CCMA study plan can rank the weakest domains first and guide the next step."
+          mode="pretest"
+          questions={questions}
+          title="CCMA diagnostic pre-test"
+        />
+      </section>
     </div>
   );
 }
-

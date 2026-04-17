@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { StudySession } from "@/components/ccma/study-session";
-import { requireViewer } from "@/lib/auth/session";
+import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import { getPretestDomainBreakdown, getPretestScore } from "@/lib/ccma/onboarding/pretest";
 import {
   getCompletedLessonIdsFromSessions,
@@ -19,9 +19,9 @@ export default async function StudySessionPage({
 }: {
   params: Params;
 }) {
-  const viewer = await requireViewer();
+  const viewer = await requireCcmaViewer();
   const { sessionId } = await params;
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
 
   const [progression, { data: session }, { data: turns }, { data: studySessions }] = await Promise.all([
     getStudentProgressionSnapshot({
@@ -29,14 +29,14 @@ export default async function StudySessionPage({
       pretestScore: getPretestScore(viewer.user),
       pretestDomainBreakdown: getPretestDomainBreakdown(viewer.user),
     }),
-    supabase.from("tutor_sessions").select("*").eq("id", sessionId).eq("user_id", viewer.user.id).single(),
+    supabase.from("ccma_tutor_sessions").select("*").eq("id", sessionId).eq("user_id", viewer.user.id).single(),
     supabase
-      .from("tutor_turns")
+      .from("ccma_tutor_turns")
       .select("*")
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true }),
     supabase
-      .from("tutor_sessions")
+      .from("ccma_tutor_sessions")
       .select("status, session_state_json")
       .eq("user_id", viewer.user.id),
   ]);
@@ -76,7 +76,7 @@ export default async function StudySessionPage({
         state,
         activeSeconds: session.active_seconds,
       }}
-      initialTurns={(turns ?? []).map((turn) => ({
+      initialTurns={(turns ?? []).map((turn: any) => ({
         id: turn.id,
         actor: turn.actor,
         content: turn.content,

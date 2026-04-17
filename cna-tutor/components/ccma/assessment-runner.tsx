@@ -63,8 +63,8 @@ function getInlineResultContent(args: {
   }
 
   if (mode === "quiz") {
-    const studyHref = domainSlug ? `/study-plan?topics=${domainSlug}` : "/ccma/study-plan";
-    const sectionMockHref = domainSlug ? `/mock-exam?domain=${domainSlug}` : "/ccma/mock-exam";
+    const studyHref = domainSlug ? `/ccma/study-plan?topics=${domainSlug}` : "/ccma/study-plan";
+    const sectionMockHref = domainSlug ? `/ccma/mock-exam?domain=${domainSlug}` : "/ccma/mock-exam";
 
     return result.summary.passed
       ? {
@@ -103,7 +103,7 @@ function getInlineResultContent(args: {
     return result.summary.passed
       ? {
           primaryAction: {
-            href: "/quiz?mode=drill",
+            href: "/ccma/quiz?mode=drill",
             label: t({ en: "Drill again", es: "Practicar otra vez" }),
           },
           secondaryAction: {
@@ -118,7 +118,7 @@ function getInlineResultContent(args: {
         }
       : {
           primaryAction: {
-            href: "/quiz?mode=drill",
+            href: "/ccma/quiz?mode=drill",
             label: t({ en: "Drill again", es: "Practicar otra vez" }),
           },
           secondaryAction: {
