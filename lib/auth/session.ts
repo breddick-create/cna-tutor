@@ -5,7 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+type Profile = Database["public"]["Tables"]["ccma_profiles"]["Row"];
 
 export type Viewer = {
   user: User;
@@ -23,7 +23,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   }
 
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("ccma_profiles")
     .select("*")
     .eq("id", user.id)
     .single();

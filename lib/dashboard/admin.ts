@@ -77,7 +77,7 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
   const activity = filters.activity ?? "all";
 
   let profileQuery = supabase
-    .from("profiles")
+    .from("ccma_profiles")
     .select("id, full_name, email, cohort, study_goal_hours, last_login_at, last_activity_at")
     .eq("role", "student")
     .order("created_at", { ascending: false });
@@ -94,13 +94,16 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
     studentIds.length
       ? [
           supabase
-            .from("daily_user_stats")
+            .from("ccma_daily_user_stats")
             .select("*")
             .in("user_id", studentIds)
             .gte("date", from)
             .lte("date", to)
             .order("date", { ascending: true }),
-          supabase.from("domain_mastery").select("user_id, mastery_score").in("user_id", studentIds),
+          supabase
+            .from("ccma_domain_mastery")
+            .select("user_id, mastery_score")
+            .in("user_id", studentIds),
         ]
       : [{ data: [] }, { data: [] }],
   );

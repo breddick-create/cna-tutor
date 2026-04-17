@@ -9,7 +9,7 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      activity_events: {
+      ccma_activity_events: {
         Row: {
           id: string;
           user_id: string;
@@ -34,8 +34,9 @@ export type Database = {
           metadata_json?: Json;
           occurred_at?: string;
         };
+        Relationships: [];
       };
-      daily_user_stats: {
+      ccma_daily_user_stats: {
         Row: {
           user_id: string;
           date: string;
@@ -78,8 +79,9 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
-      domain_mastery: {
+      ccma_domain_mastery: {
         Row: {
           id: string;
           user_id: string;
@@ -110,8 +112,9 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
-      domains: {
+      ccma_domains: {
         Row: {
           id: string;
           slug: string;
@@ -136,8 +139,9 @@ export type Database = {
           sort_order?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
-      lessons: {
+      ccma_lessons: {
         Row: {
           id: string;
           domain_id: string;
@@ -192,8 +196,9 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
-      mock_exam_attempts: {
+      ccma_mock_exam_attempts: {
         Row: {
           id: string;
           user_id: string;
@@ -224,8 +229,9 @@ export type Database = {
           completed_at?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
-      profiles: {
+      ccma_profiles: {
         Row: {
           id: string;
           role: "student" | "admin";
@@ -262,8 +268,9 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
-      question_bank: {
+      ccma_question_bank: {
         Row: {
           id: string;
           domain_id: string;
@@ -303,8 +310,9 @@ export type Database = {
           difficulty?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
-      quiz_attempts: {
+      ccma_quiz_attempts: {
         Row: {
           id: string;
           user_id: string;
@@ -338,8 +346,9 @@ export type Database = {
           completed_at?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
-      tutor_sessions: {
+      ccma_tutor_sessions: {
         Row: {
           id: string;
           user_id: string;
@@ -409,8 +418,9 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
-      tutor_turns: {
+      ccma_tutor_turns: {
         Row: {
           id: string;
           session_id: string;
@@ -438,7 +448,12 @@ export type Database = {
           correctness?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
+    Views: {};
+    Functions: {};
+    Enums: {};
+    CompositeTypes: {};
   };
 };

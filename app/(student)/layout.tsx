@@ -17,8 +17,8 @@ export default async function StudentLayout({
   return (
     <AppShell
       roleLabel="Student"
-      title="CNA Tutor"
-      subtitle="Your guided study workspace for the Texas CNA written exam."
+      title="CCMA Tutor"
+      subtitle="Your guided study workspace for the NHA CCMA exam."
       fullName={viewer.profile.full_name}
       email={viewer.profile.email}
     >

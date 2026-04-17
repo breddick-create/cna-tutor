@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/types/database";
 
-type SessionRow = Database["public"]["Tables"]["tutor_sessions"]["Row"];
+type SessionRow = Database["public"]["Tables"]["ccma_tutor_sessions"]["Row"];
 
 const ACTIVE_CAP_SECONDS = 5 * 60;
 
@@ -17,7 +17,7 @@ export async function recordStudyInteraction(args: {
   supabase: SupabaseClient<Database>;
   session: SessionRow;
   eventType: string;
-  metadata?: Database["public"]["Tables"]["activity_events"]["Insert"]["metadata_json"];
+  metadata?: Database["public"]["Tables"]["ccma_activity_events"]["Insert"]["metadata_json"];
   markLessonCompleted?: boolean;
 }) {
   const now = new Date().toISOString();
@@ -31,7 +31,7 @@ export async function recordStudyInteraction(args: {
   const updatedIdleSeconds = args.session.idle_seconds + idleSeconds;
 
   await args.supabase
-    .from("tutor_sessions")
+    .from("ccma_tutor_sessions")
     .update({
       total_seconds: updatedTotalSeconds,
       active_seconds: updatedActiveSeconds,
@@ -41,7 +41,7 @@ export async function recordStudyInteraction(args: {
     .eq("id", args.session.id);
 
   const { data: existingDailyStat } = await args.supabase
-    .from("daily_user_stats")
+    .from("ccma_daily_user_stats")
     .select("*")
     .eq("user_id", args.session.user_id)
     .eq("date", statDate)
@@ -49,7 +49,7 @@ export async function recordStudyInteraction(args: {
 
   if (existingDailyStat) {
     await args.supabase
-      .from("daily_user_stats")
+      .from("ccma_daily_user_stats")
       .update({
         total_seconds: existingDailyStat.total_seconds + deltaSeconds,
         active_seconds: existingDailyStat.active_seconds + activeSeconds,
@@ -61,7 +61,7 @@ export async function recordStudyInteraction(args: {
       .eq("user_id", args.session.user_id)
       .eq("date", statDate);
   } else {
-    await args.supabase.from("daily_user_stats").insert({
+    await args.supabase.from("ccma_daily_user_stats").insert({
       user_id: args.session.user_id,
       date: statDate,
       total_seconds: deltaSeconds,
@@ -72,9 +72,12 @@ export async function recordStudyInteraction(args: {
     });
   }
 
-  await args.supabase.from("profiles").update({ last_activity_at: now }).eq("id", args.session.user_id);
+  await args.supabase
+    .from("ccma_profiles")
+    .update({ last_activity_at: now })
+    .eq("id", args.session.user_id);
 
-  await args.supabase.from("activity_events").insert({
+  await args.supabase.from("ccma_activity_events").insert({
     user_id: args.session.user_id,
     session_id: args.session.id,
     event_type: args.eventType,

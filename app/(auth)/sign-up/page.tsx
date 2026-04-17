@@ -25,7 +25,7 @@ export default async function SignUpPage({
   return (
     <section className="panel-strong rounded-[2rem] p-8 sm:p-10">
       <p className="eyebrow">Create Account</p>
-      <h2 className="mt-4 text-3xl font-semibold">Start the Texas CNA tutoring workspace.</h2>
+      <h2 className="mt-4 text-3xl font-semibold">Start the CCMA tutoring workspace.</h2>
       <p className="text-muted mt-3 leading-7">
         Student accounts are self-contained by default. Admin access is assigned deliberately in
         the database.
@@ -71,7 +71,7 @@ export default async function SignUpPage({
             id="cohort"
             name="cohort"
             type="text"
-            placeholder="Houston Spring 2026"
+            placeholder="CCMA Cohort Spring 2026"
           />
         </div>
 

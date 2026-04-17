@@ -33,13 +33,13 @@ export default async function StudyPage() {
 
   const [{ data: sessions }, { data: rawMasteryRows }] = await Promise.all([
     supabase
-      .from("tutor_sessions")
+      .from("ccma_tutor_sessions")
       .select("id, status, mode, last_activity_at, session_state_json")
       .eq("user_id", viewer.user.id)
       .order("last_activity_at", { ascending: false })
       .limit(6),
     supabase
-      .from("domain_mastery")
+      .from("ccma_domain_mastery")
       .select("domain_id, mastery_score, weak_streak")
       .eq("user_id", viewer.user.id)
       .order("mastery_score", { ascending: true })
@@ -48,7 +48,7 @@ export default async function StudyPage() {
 
   const domainIds = (rawMasteryRows ?? []).map((row) => row.domain_id);
   const { data: domains } = domainIds.length
-    ? await supabase.from("domains").select("id, slug, title").in("id", domainIds)
+    ? await supabase.from("ccma_domains").select("id, slug, title").in("id", domainIds)
     : { data: [] };
   const domainMap = new Map((domains ?? []).map((domain) => [domain.id, domain]));
 

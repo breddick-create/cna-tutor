@@ -14,8 +14,8 @@ const mono = Source_Code_Pro({
 });
 
 export const metadata: Metadata = {
-  title: "CNA Tutor",
-  description: "AI-guided Texas CNA written exam tutoring platform",
+  title: "CCMA Tutor",
+  description: "AI-guided NHA CCMA exam tutoring platform",
 };
 
 export default function RootLayout({

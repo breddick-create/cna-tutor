@@ -13,17 +13,17 @@ export default async function StudyPlanPage() {
 
   const [{ data: rawMasteryRows }, { data: statsRows }] = await Promise.all([
     supabase
-      .from("domain_mastery")
+      .from("ccma_domain_mastery")
       .select("domain_id, mastery_score, weak_streak")
       .eq("user_id", viewer.user.id)
       .order("mastery_score", { ascending: true })
       .limit(6),
-    supabase.from("daily_user_stats").select("*").eq("user_id", viewer.user.id),
+    supabase.from("ccma_daily_user_stats").select("*").eq("user_id", viewer.user.id),
   ]);
 
   const domainIds = (rawMasteryRows ?? []).map((row) => row.domain_id);
   const { data: domains } = domainIds.length
-    ? await supabase.from("domains").select("id, slug, title").in("id", domainIds)
+    ? await supabase.from("ccma_domains").select("id, slug, title").in("id", domainIds)
     : { data: [] };
   const domainMap = new Map((domains ?? []).map((domain) => [domain.id, domain]));
 

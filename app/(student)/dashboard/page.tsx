@@ -124,13 +124,13 @@ export default async function StudentDashboardPage() {
 
         <div className="panel rounded-[1.75rem] p-6">
           <p className="eyebrow">Phase 2 Status</p>
-          <h2 className="mt-3 text-2xl font-semibold">The guided tutor loop is now live and adaptive.</h2>
+          <h2 className="mt-3 text-2xl font-semibold">The guided tutor loop is now live, adaptive, and content-rich.</h2>
           <ul className="mt-5 space-y-3 text-sm leading-7">
             <li>Students can start teacher-led lesson sessions from the new study workspace.</li>
             <li>The tutor teaches, asks, evaluates, reteaches, and advances based on each answer.</li>
             <li>Every interaction now updates session timing, weak-area mastery, and lesson progress.</li>
             <li>Students can launch lessons in learn, quiz, rapid review, or weak-area review mode.</li>
-            <li>Next we can deepen curriculum coverage and add dedicated mock exam flows.</li>
+            <li>The CCMA bank now supports broader quizzes, a fuller mock exam, and deeper guided lessons across every domain.</li>
           </ul>
         </div>
       </section>

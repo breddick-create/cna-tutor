@@ -51,7 +51,7 @@ export default async function QuizPage({
       </section>
 
       <AssessmentRunner
-        description={`This five-question check focuses on ${selectedDomain.title}. Use it when you want a fast score before returning to guided tutoring.`}
+        description={`This focused check targets ${selectedDomain.title}. Use these ${questions.length} questions for a fast score before returning to guided tutoring.`}
         domainSlug={selectedDomain.slug}
         mode="quiz"
         questions={questions}

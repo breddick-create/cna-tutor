@@ -340,8 +340,8 @@ async function generateModelMessage(context: TutorMessageContext) {
       ? `Mode rules: reinforce the weak idea with patient, repetitive coaching and a simple memory anchor.`
       : null,
     context.action === "wrap"
-      ? `Output rules: keep it under 140 words, sound like a supportive CNA instructor, recap the lesson, celebrate progress, and do not end with a question.`
-      : `Output rules: keep it under 140 words, sound like a supportive CNA instructor, and end with exactly one clear question.`,
+      ? `Output rules: keep it under 140 words, sound like a supportive CCMA instructor, recap the lesson, celebrate progress, and do not end with a question.`
+      : `Output rules: keep it under 140 words, sound like a supportive CCMA instructor, and end with exactly one clear question.`,
   ]
     .filter(Boolean)
     .join("\n");

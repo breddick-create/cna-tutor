@@ -1,4 +1,4 @@
-import { tutorLessonLibrary } from "@/content/texas-cna/lesson-library";
+import { tutorLessonLibrary } from "@/content/ccma/lesson-library";
 import type { TutorLesson, TutorMode } from "@/lib/tutor/types";
 
 export function listTutorLessons() {

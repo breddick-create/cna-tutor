@@ -5,15 +5,15 @@ export async function getStudentDashboard(userId: string, studyGoalHours: number
   const supabase = await createClient();
 
   const [{ data: statsRows }, { data: masteryRows }, { data: activityRows }] = await Promise.all([
-    supabase.from("daily_user_stats").select("*").eq("user_id", userId),
+    supabase.from("ccma_daily_user_stats").select("*").eq("user_id", userId),
     supabase
-      .from("domain_mastery")
+      .from("ccma_domain_mastery")
       .select("domain_id, mastery_score, weak_streak")
       .eq("user_id", userId)
       .order("mastery_score", { ascending: true })
       .limit(3),
     supabase
-      .from("activity_events")
+      .from("ccma_activity_events")
       .select("id, event_type, occurred_at")
       .eq("user_id", userId)
       .order("occurred_at", { ascending: false })
@@ -40,7 +40,7 @@ export async function getStudentDashboard(userId: string, studyGoalHours: number
 
   const domainIds = (masteryRows ?? []).map((row) => row.domain_id);
   const { data: domains } = domainIds.length
-    ? await supabase.from("domains").select("id, title").in("id", domainIds)
+    ? await supabase.from("ccma_domains").select("id, title").in("id", domainIds)
     : { data: [] };
   const domainTitles = new Map((domains ?? []).map((domain) => [domain.id, domain.title]));
 

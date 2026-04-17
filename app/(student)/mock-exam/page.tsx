@@ -16,7 +16,7 @@ export default async function MockExamPage() {
             <p className="eyebrow">Mock Exam</p>
             <h1 className="mt-3 text-3xl font-semibold">Simulate a broader written-exam pass.</h1>
             <p className="text-muted mt-3 max-w-3xl leading-7">
-              This mock exam pulls questions across multiple CNA domains, scores the result, and
+              This mock exam pulls questions across multiple CCMA domains, scores the result, and
               flags weak areas for immediate follow-up.
             </p>
           </div>
@@ -27,10 +27,10 @@ export default async function MockExamPage() {
       </section>
 
       <AssessmentRunner
-        description="Use this fifteen-question mock exam to see how your knowledge is holding together across the exam blueprint."
+        description={`Use this ${questions.length}-question mock exam to see how your knowledge is holding together across the CCMA exam blueprint.`}
         mode="mock_exam"
         questions={questions}
-        title="Texas CNA mock exam"
+        title="CCMA mock exam"
       />
     </div>
   );

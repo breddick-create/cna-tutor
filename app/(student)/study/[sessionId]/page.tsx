@@ -18,9 +18,14 @@ export default async function StudySessionPage({
   const supabase = await createClient();
 
   const [{ data: session }, { data: turns }] = await Promise.all([
-    supabase.from("tutor_sessions").select("*").eq("id", sessionId).eq("user_id", viewer.user.id).single(),
     supabase
-      .from("tutor_turns")
+      .from("ccma_tutor_sessions")
+      .select("*")
+      .eq("id", sessionId)
+      .eq("user_id", viewer.user.id)
+      .single(),
+    supabase
+      .from("ccma_tutor_turns")
       .select("*")
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true }),

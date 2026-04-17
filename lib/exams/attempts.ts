@@ -32,7 +32,7 @@ async function updateDailyAssessmentStats(args: {
 }) {
   const statDate = new Date().toISOString().slice(0, 10);
   const { data: existingDailyStat } = await args.admin
-    .from("daily_user_stats")
+    .from("ccma_daily_user_stats")
     .select("*")
     .eq("user_id", args.userId)
     .eq("date", statDate)
@@ -53,13 +53,13 @@ async function updateDailyAssessmentStats(args: {
 
   if (existingDailyStat) {
     await args.admin
-      .from("daily_user_stats")
+      .from("ccma_daily_user_stats")
       .update({
         total_seconds: existingDailyStat.total_seconds + args.timeSpentSeconds,
         active_seconds: existingDailyStat.active_seconds + args.timeSpentSeconds,
         quizzes_completed: existingDailyStat.quizzes_completed + quizIncrement,
         mock_exams_completed: existingDailyStat.mock_exams_completed + mockIncrement,
-        average_score,
+        average_score: averageScore,
       })
       .eq("user_id", args.userId)
       .eq("date", statDate);
@@ -67,7 +67,7 @@ async function updateDailyAssessmentStats(args: {
     return;
   }
 
-  await args.admin.from("daily_user_stats").insert({
+  await args.admin.from("ccma_daily_user_stats").insert({
     user_id: args.userId,
     date: statDate,
     total_seconds: args.timeSpentSeconds,
@@ -91,7 +91,7 @@ async function updateDomainBreakdownMastery(args: {
     }
 
     const { data: existing } = await args.admin
-      .from("domain_mastery")
+      .from("ccma_domain_mastery")
       .select("*")
       .eq("user_id", args.userId)
       .eq("domain_id", domainId)
@@ -108,7 +108,7 @@ async function updateDomainBreakdownMastery(args: {
 
     if (existing) {
       await args.admin
-        .from("domain_mastery")
+        .from("ccma_domain_mastery")
         .update({
           mastery_score: masteryScore,
           weak_streak: weakStreak,
@@ -116,7 +116,7 @@ async function updateDomainBreakdownMastery(args: {
         })
         .eq("id", existing.id);
     } else {
-      await args.admin.from("domain_mastery").insert({
+      await args.admin.from("ccma_domain_mastery").insert({
         user_id: args.userId,
         domain_id: domainId,
         mastery_score: masteryScore,
@@ -138,7 +138,7 @@ export async function recordAssessmentAttempt(summary: AssessmentSummary) {
       ? await ensureDomainRecord(primaryDomain.domainSlug, primaryDomain.domainTitle)
       : null;
 
-    await admin.from("quiz_attempts").insert({
+    await admin.from("ccma_quiz_attempts").insert({
       user_id: summary.userId,
       domain_id: domainId,
       score: summary.score,
@@ -147,7 +147,7 @@ export async function recordAssessmentAttempt(summary: AssessmentSummary) {
       completed_at: now,
     });
   } else {
-    await admin.from("mock_exam_attempts").insert({
+    await admin.from("ccma_mock_exam_attempts").insert({
       user_id: summary.userId,
       score: summary.score,
       percent: summary.score,
@@ -171,11 +171,11 @@ export async function recordAssessmentAttempt(summary: AssessmentSummary) {
     domainBreakdown: summary.domainBreakdown,
   });
 
-  await admin.from("profiles").update({
+  await admin.from("ccma_profiles").update({
     last_activity_at: now,
   }).eq("id", summary.userId);
 
-  await admin.from("activity_events").insert({
+  await admin.from("ccma_activity_events").insert({
     user_id: summary.userId,
     event_type: summary.mode === "quiz" ? "quiz_completed" : "mock_exam_completed",
     metadata_json: {
@@ -184,7 +184,7 @@ export async function recordAssessmentAttempt(summary: AssessmentSummary) {
       passed: summary.passed,
       domainSlug: summary.domainSlug ?? null,
       timeSpentSeconds: creditedSeconds,
-    } satisfies Database["public"]["Tables"]["activity_events"]["Insert"]["metadata_json"],
+    } satisfies Database["public"]["Tables"]["ccma_activity_events"]["Insert"]["metadata_json"],
     occurred_at: now,
   });
 }

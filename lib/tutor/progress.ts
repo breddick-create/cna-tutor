@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { texasCnaDomains } from "@/content/texas-cna/domains";
+import { ccmaDomains } from "@/content/ccma/domains";
 import type { TutorEvaluation, TutorLesson } from "@/lib/tutor/types";
 
 function clamp(value: number, min: number, max: number) {
@@ -9,10 +9,10 @@ function clamp(value: number, min: number, max: number) {
 export async function ensureDomainRecord(domainSlug: string, domainTitle: string) {
   const admin = createAdminClient();
   const localDomain =
-    texasCnaDomains.find((domain) => domain.slug === domainSlug) ?? null;
+    ccmaDomains.find((domain) => domain.slug === domainSlug) ?? null;
 
   const { data: existing } = await admin
-    .from("domains")
+    .from("ccma_domains")
     .select("id")
     .eq("slug", domainSlug)
     .maybeSingle();
@@ -22,7 +22,7 @@ export async function ensureDomainRecord(domainSlug: string, domainTitle: string
   }
 
   const { data: inserted } = await admin
-    .from("domains")
+    .from("ccma_domains")
     .insert({
       slug: domainSlug,
       title: domainTitle,
@@ -47,7 +47,7 @@ export async function updateDomainMastery(args: {
   }
 
   const { data: existing } = await admin
-    .from("domain_mastery")
+    .from("ccma_domain_mastery")
     .select("*")
     .eq("user_id", args.userId)
     .eq("domain_id", domainId)
@@ -72,7 +72,7 @@ export async function updateDomainMastery(args: {
 
   if (existing) {
     const { data } = await admin
-      .from("domain_mastery")
+      .from("ccma_domain_mastery")
       .update(payload)
       .eq("id", existing.id)
       .select("*")
@@ -81,6 +81,10 @@ export async function updateDomainMastery(args: {
     return data;
   }
 
-  const { data } = await admin.from("domain_mastery").insert(payload).select("*").single();
+  const { data } = await admin
+    .from("ccma_domain_mastery")
+    .insert(payload)
+    .select("*")
+    .single();
   return data;
 }

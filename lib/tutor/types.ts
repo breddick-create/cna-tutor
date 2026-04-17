@@ -1,6 +1,6 @@
 import type { Database } from "@/types/database";
 
-export type TutorMode = Database["public"]["Tables"]["tutor_sessions"]["Row"]["mode"];
+export type TutorMode = Database["public"]["Tables"]["ccma_tutor_sessions"]["Row"]["mode"];
 export type TutorDifficultyTier = "foundation" | "standard" | "challenge";
 
 export type TutorStep =

@@ -2,7 +2,7 @@ import { getLessonByDomain, listTutorLessons } from "@/lib/tutor/lessons";
 import type { Database } from "@/types/database";
 
 type MasteryRow = Pick<
-  Database["public"]["Tables"]["domain_mastery"]["Row"],
+  Database["public"]["Tables"]["ccma_domain_mastery"]["Row"],
   "domain_id" | "mastery_score" | "weak_streak"
 > & {
   domainTitle?: string;

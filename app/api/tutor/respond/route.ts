@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
   const supabase = await createClient();
   const { data: session, error: sessionError } = await supabase
-    .from("tutor_sessions")
+    .from("ccma_tutor_sessions")
     .select("*")
     .eq("id", parsed.data.sessionId)
     .eq("user_id", viewer.user.id)
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Lesson not found." }, { status: 404 });
   }
 
-  const { error: studentTurnError } = await supabase.from("tutor_turns").insert({
+  const { error: studentTurnError } = await supabase.from("ccma_tutor_turns").insert({
     session_id: session.id,
     actor: "student",
     turn_type: "student_response",
@@ -84,7 +84,7 @@ export async function POST(request: Request) {
   const nextStatus = result.nextState.sessionComplete ? "completed" : "active";
 
   const { error: updateSessionError } = await supabase
-    .from("tutor_sessions")
+    .from("ccma_tutor_sessions")
     .update({
       session_state_json: result.nextState,
       status: nextStatus,
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
   }
 
   const { data: tutorTurn, error: tutorTurnError } = await supabase
-    .from("tutor_turns")
+    .from("ccma_tutor_turns")
     .insert({
       session_id: session.id,
       actor: "tutor",

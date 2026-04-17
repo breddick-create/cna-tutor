@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 function buildRedirect(path: string, message: string) {
@@ -30,8 +31,8 @@ export async function signInAction(formData: FormData) {
 
   if (user) {
     const now = new Date().toISOString();
-    await supabase
-      .from("profiles")
+    await createAdminClient()
+      .from("ccma_profiles")
       .update({
         last_login_at: now,
         last_activity_at: now,

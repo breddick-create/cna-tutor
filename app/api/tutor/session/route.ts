@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
   const supabase = await createClient();
   const { data: masteryRows } = await supabase
-    .from("domain_mastery")
+    .from("ccma_domain_mastery")
     .select("domain_id, mastery_score, weak_streak")
     .eq("user_id", viewer.user.id)
     .order("mastery_score", { ascending: true })
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 
   const domainIds = (masteryRows ?? []).map((row) => row.domain_id);
   const { data: domains } = domainIds.length
-    ? await supabase.from("domains").select("id, title").in("id", domainIds)
+    ? await supabase.from("ccma_domains").select("id, title").in("id", domainIds)
     : { data: [] };
   const titleMap = new Map((domains ?? []).map((domain) => [domain.id, domain.title]));
   const weakAreasSnapshot = (masteryRows ?? [])
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   });
 
   const { data: session, error: sessionError } = await supabase
-    .from("tutor_sessions")
+    .from("ccma_tutor_sessions")
     .insert({
       user_id: viewer.user.id,
       mode: initialTurn.state.mode,
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unable to create session." }, { status: 500 });
   }
 
-  const { error: turnError } = await supabase.from("tutor_turns").insert({
+  const { error: turnError } = await supabase.from("ccma_tutor_turns").insert({
     session_id: session.id,
     actor: "tutor",
     turn_type: "lesson_intro",
