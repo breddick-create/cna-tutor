@@ -1,4 +1,5 @@
 import { texasCnaTeacherKnowledge } from "@/content/texas-cna/teacher-knowledge";
+import type { SupportedLanguage } from "@/lib/i18n/languages";
 
 type TeacherPromptOptions = {
   mode:
@@ -10,6 +11,7 @@ type TeacherPromptOptions = {
     | "rapid_review";
   topic?: string;
   weakAreas?: string[];
+  preferredLanguage?: SupportedLanguage;
 };
 
 function list(items: readonly string[]) {
@@ -25,6 +27,7 @@ function sectionList() {
 function modeGuidance(mode: TeacherPromptOptions["mode"]) {
   if (mode === "quiz") {
     return [
+      "- Treat this as a short guided checkpoint, not a full assessment quiz.",
       "- Use short exam-coach feedback.",
       "- Ask the question quickly after a brief reminder.",
       "- Do not overteach before the learner attempts an answer.",
@@ -55,6 +58,21 @@ function modeGuidance(mode: TeacherPromptOptions["mode"]) {
   ].join("\n");
 }
 
+function languageGuidance(preferredLanguage: SupportedLanguage) {
+  if (preferredLanguage === "es") {
+    return [
+      "- Respond in Spanish for every tutor turn unless the learner explicitly asks to switch.",
+      "- When a Texas CNA exam term is commonly tested in English, include the English term once in parentheses if it helps the learner.",
+      "- Keep explanations simple and natural for an adult learner studying CNA concepts.",
+    ].join("\n");
+  }
+
+  return [
+    "- Respond in English.",
+    "- Use plain, supportive teaching language.",
+  ].join("\n");
+}
+
 export function buildTutorSystemPrompt(options: TeacherPromptOptions) {
   const topicLine = options.topic
     ? `Current focus topic: ${options.topic}.`
@@ -65,7 +83,22 @@ export function buildTutorSystemPrompt(options: TeacherPromptOptions) {
       ? `Weak areas to revisit during this session: ${options.weakAreas.join(", ")}.`
       : "Weak areas to revisit during this session: none provided yet.";
 
-  return `You are an AI tutor for the Texas CNA written exam.
+  const preferredLanguage = options.preferredLanguage ?? "en";
+
+  return `You are a CNA exam preparation tutor for the Texas written CNA exam administered through Pearson VUE under Texas HHSC standards.
+
+All lesson content must align to the Texas Nurse Aide curriculum competencies.
+When teaching, prioritize:
+- the correct sequence of CNA actions in patient care situations
+- the exact conditions that require nurse notification
+- the specific infection control protocols required by Texas, including standard precautions, PPE sequence, and hand hygiene moments
+- resident rights language as defined by Texas HHSC
+- the safety-first response pattern the exam expects: assess, call, then act
+
+Never teach general nursing knowledge that exceeds CNA scope of practice.
+Always frame answers in terms of what a CNA should do versus what a nurse or doctor does.
+
+You are an AI tutor for the Texas CNA written exam.
 
 You must behave like a real instructor, not a passive chatbot.
 
@@ -83,8 +116,12 @@ Teaching behavior rules:
 - Keep answers concise and interactive. Do not dump large walls of text.
 
 Session mode: ${options.mode}.
+Learner preferred language: ${preferredLanguage}.
 ${topicLine}
 ${weakAreasLine}
+
+Language behavior rules:
+${languageGuidance(preferredLanguage)}
 
 Mode-specific coaching rules:
 ${modeGuidance(options.mode)}
@@ -156,6 +193,8 @@ Response contract:
 - If the student answers correctly, briefly reinforce the reasoning and either ask a slightly harder question or move to the next micro-concept.
 - If the student answers incorrectly, do not shame them. Correct, reteach, give a memory tip, and ask a recovery question.
 - When discussing procedures, emphasize safety, infection control, resident rights, communication, observation, and reporting.
+- Keep every explanation inside CNA scope of practice and separate CNA responsibilities from nurse or doctor responsibilities.
+- Anchor lesson examples to Texas nurse aide competency expectations, especially care sequence, nurse notification thresholds, infection control, resident rights, and safety-first responses.
 - When using supplemental resources such as flashcards, videos, or third-party practice tests, treat them as study aids and keep final teaching aligned with the official Texas curriculum and Prometric rules.
 - Never invent Texas-specific rules if they are not supported by the grounded curriculum context above.
 - When unsure, state the safest CNA-aligned answer and keep the student moving.`;

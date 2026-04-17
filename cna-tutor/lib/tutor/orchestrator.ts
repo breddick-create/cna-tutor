@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@/lib/i18n/languages";
 import { buildTutorSystemPrompt } from "@/lib/tutor/prompts";
 import { getTutorLesson, resolveLessonMode } from "@/lib/tutor/lessons";
 import { DEFAULT_TUTOR_MODEL, getOpenAIClient } from "@/lib/tutor/openai";
@@ -53,7 +54,7 @@ function determineDifficultyTier(args: {
 
 function getModeIntro(mode: TutorMode) {
   if (mode === "quiz") {
-    return "We are in quiz mode, so I will keep teaching brief and check your answer more directly.";
+    return "We are in guided check mode, so I will keep teaching brief and check your answer more directly.";
   }
 
   if (mode === "rapid_review") {
@@ -71,6 +72,7 @@ export function createInitialTutorSessionState(
   lessonId: string,
   modeOverride?: TutorMode,
   weakAreasSnapshot: string[] = [],
+  preferredLanguage: SupportedLanguage = "en",
 ): TutorSessionState {
   const lesson = getTutorLesson(lessonId);
 
@@ -83,6 +85,7 @@ export function createInitialTutorSessionState(
   return {
     lessonId: lesson.id,
     mode,
+    preferredLanguage,
     currentSegmentIndex: 0,
     step: "intro",
     attemptsOnCurrentQuestion: 0,
@@ -112,7 +115,7 @@ export function parseTutorSessionState(
       return null;
     }
 
-    return createInitialTutorSessionState(lessonId, modeOverride);
+    return createInitialTutorSessionState(lessonId, modeOverride, [], "en");
   }
 
   const raw = input as Partial<TutorSessionState>;
@@ -122,12 +125,13 @@ export function parseTutorSessionState(
       return null;
     }
 
-    return createInitialTutorSessionState(lessonId, modeOverride);
+    return createInitialTutorSessionState(lessonId, modeOverride, [], "en");
   }
 
   return {
     lessonId: raw.lessonId,
     mode: modeOverride ?? raw.mode,
+    preferredLanguage: raw.preferredLanguage ?? "en",
     currentSegmentIndex: raw.currentSegmentIndex ?? 0,
     step: raw.step ?? "intro",
     attemptsOnCurrentQuestion: raw.attemptsOnCurrentQuestion ?? 0,
@@ -245,7 +249,7 @@ function renderFallbackMessage(context: TutorMessageContext) {
   if (context.action === "intro") {
     if (context.state.mode === "quiz") {
       return [
-        `Today we're checking ${context.lesson.title}.`,
+        `Today we're doing a guided check on ${context.lesson.title}.`,
         modePrefix,
         `Quick reminder: ${context.segment.concept}`,
         context.segment.question,
@@ -267,7 +271,7 @@ function renderFallbackMessage(context: TutorMessageContext) {
     return [
       context.evaluation?.correctExplanation ?? "That's right.",
       context.state.mode === "quiz"
-        ? `Let's check the next question in ${nextSegment.title}.`
+        ? `Let's move to the next guided question in ${nextSegment.title}.`
         : `Let's move to the next idea: ${nextSegment.title}.`,
       context.state.mode === "quiz" ? `Focus point: ${nextSegment.concept}` : nextSegment.concept,
       context.state.mode === "rapid_review" ? null : `Example: ${nextSegment.example}`,
@@ -314,6 +318,7 @@ async function generateModelMessage(context: TutorMessageContext) {
     `Current segment checkpoint question: ${context.segment.question}`,
     `Action: ${context.action}`,
     `Tutoring mode: ${context.state.mode}`,
+    `Preferred teaching language: ${context.state.preferredLanguage}`,
     `Difficulty tier: ${context.state.difficultyTier}`,
     `Remediation level: ${context.state.remediationLevel}`,
     `Session step: ${context.state.step}`,
@@ -331,7 +336,7 @@ async function generateModelMessage(context: TutorMessageContext) {
       ? `Use this memory tip if needed: ${context.evaluation.memoryTip}`
       : `Ask the checkpoint question at the end.`,
     context.state.mode === "quiz"
-      ? `Mode rules: keep teaching minimal, ask the checkpoint quickly, and frame feedback like an exam coach.`
+      ? `Mode rules: keep teaching minimal, ask the checkpoint quickly, and frame feedback like a guided exam coach.`
       : null,
     context.state.mode === "rapid_review"
       ? `Mode rules: keep it brisk, high-yield, and exam-focused.`
@@ -352,6 +357,7 @@ async function generateModelMessage(context: TutorMessageContext) {
       mode: context.state.mode,
       topic: context.lesson.title,
       weakAreas: [],
+      preferredLanguage: context.state.preferredLanguage,
     }),
     input: prompt,
     store: false,
@@ -407,6 +413,7 @@ export async function buildInitialTutorTurnForMode(args: {
   lessonId: string;
   mode?: TutorMode;
   weakAreasSnapshot?: string[];
+  preferredLanguage?: SupportedLanguage;
 }) {
   const lesson = getTutorLesson(args.lessonId);
 
@@ -418,6 +425,7 @@ export async function buildInitialTutorTurnForMode(args: {
     args.lessonId,
     args.mode,
     args.weakAreasSnapshot ?? [],
+    args.preferredLanguage ?? "en",
   );
   const segment = getCurrentSegment(lesson, state);
   const message = await generateTutorMessage({

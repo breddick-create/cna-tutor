@@ -1,7 +1,13 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { StudySession } from "@/components/tutor/study-session";
 import { requireViewer } from "@/lib/auth/session";
+import { getPretestDomainBreakdown, getPretestScore } from "@/lib/onboarding/pretest";
+import {
+  getCompletedLessonIdsFromSessions,
+  isLessonUnlockedForStudyPath,
+} from "@/lib/progression/study-path";
+import { getStudentProgressionSnapshot } from "@/lib/progression/student";
 import { createClient } from "@/lib/supabase/server";
 import { getTutorLesson } from "@/lib/tutor/lessons";
 import { parseTutorSessionState } from "@/lib/tutor/orchestrator";
@@ -17,13 +23,22 @@ export default async function StudySessionPage({
   const { sessionId } = await params;
   const supabase = await createClient();
 
-  const [{ data: session }, { data: turns }] = await Promise.all([
+  const [progression, { data: session }, { data: turns }, { data: studySessions }] = await Promise.all([
+    getStudentProgressionSnapshot({
+      userId: viewer.user.id,
+      pretestScore: getPretestScore(viewer.user),
+      pretestDomainBreakdown: getPretestDomainBreakdown(viewer.user),
+    }),
     supabase.from("tutor_sessions").select("*").eq("id", sessionId).eq("user_id", viewer.user.id).single(),
     supabase
       .from("tutor_turns")
       .select("*")
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("tutor_sessions")
+      .select("status, session_state_json")
+      .eq("user_id", viewer.user.id),
   ]);
 
   if (!session) {
@@ -40,6 +55,16 @@ export default async function StudySessionPage({
 
   if (!lesson) {
     notFound();
+  }
+
+  if (
+    !isLessonUnlockedForStudyPath({
+      lessonId: lesson.id,
+      progression,
+      completedLessonIds: getCompletedLessonIdsFromSessions(studySessions ?? []),
+    })
+  ) {
+    redirect("/study-plan");
   }
 
   return (

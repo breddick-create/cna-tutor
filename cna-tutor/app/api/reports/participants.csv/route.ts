@@ -31,35 +31,29 @@ export async function GET(request: Request) {
 
   const headers = [
     "Name",
-    "Email",
     "Cohort",
-    "Total Hours",
-    "Active Study Hours",
-    "Lessons Completed",
-    "Quizzes Taken",
-    "Mock Exams Taken",
-    "Average Score",
-    "Mastery Level",
-    "Last Login",
+    "Readiness Label",
+    "Weak Area 1",
+    "Weak Area 2",
     "Last Activity",
-    "Completion Percent",
+    "Mock Exams Completed",
+    "Email",
+    "Status",
+    "Readiness Score",
   ];
 
   const rows = dashboard.participantRows.map((row) =>
     [
       row.name,
-      row.email,
       row.cohort,
-      row.totalHours,
-      row.activeHours,
-      row.lessonsCompleted,
-      row.quizzesTaken,
-      row.mockExamsTaken,
-      `${row.averageScore}%`,
-      row.masteryLevel,
-      row.lastLogin,
+      row.readinessLabel,
+      row.topWeakAreas[0] ?? "",
+      row.topWeakAreas[1] ?? "",
       row.lastActivity,
-      `${row.completionPercent}%`,
+      row.mockExamsTaken,
+      row.email,
+      row.statusLabel,
+      row.readinessScore !== null ? `${row.readinessScore}%` : "",
     ]
       .map(escapeCsv)
       .join(","),
@@ -70,7 +64,8 @@ export async function GET(request: Request) {
   return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": 'attachment; filename="participant-report.csv"',
+      "Content-Disposition": 'attachment; filename="cohort-progress-report.csv"',
     },
   });
 }
+

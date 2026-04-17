@@ -21,6 +21,7 @@ create table public.profiles (
   full_name text not null,
   email text not null unique,
   cohort text,
+  preferred_language text not null default 'english',
   study_goal_hours integer not null default 40,
   last_login_at timestamptz,
   last_activity_at timestamptz,
@@ -191,19 +192,21 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, role, full_name, email, cohort)
+  insert into public.profiles (id, role, full_name, email, cohort, preferred_language)
   values (
     new.id,
     coalesce((new.raw_user_meta_data ->> 'role')::public.app_role, 'student'),
     coalesce(new.raw_user_meta_data ->> 'full_name', split_part(new.email, '@', 1)),
     new.email,
-    nullif(new.raw_user_meta_data ->> 'cohort', '')
+    nullif(new.raw_user_meta_data ->> 'cohort', ''),
+    coalesce(nullif(new.raw_user_meta_data ->> 'preferred_language', ''), 'english')
   )
   on conflict (id) do update
   set
     email = excluded.email,
     full_name = excluded.full_name,
-    cohort = excluded.cohort;
+    cohort = excluded.cohort,
+    preferred_language = excluded.preferred_language;
 
   return new;
 end;
@@ -397,3 +400,4 @@ on public.daily_user_stats
 for update
 using (auth.uid() = user_id or public.is_admin())
 with check (auth.uid() = user_id or public.is_admin());
+

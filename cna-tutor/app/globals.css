@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4efe6;
-  --background-strong: #e9dfd1;
-  --panel: rgba(255, 250, 244, 0.86);
-  --panel-strong: rgba(255, 248, 240, 0.96);
-  --foreground: #1d2a26;
-  --muted: #5b6c66;
-  --border: rgba(29, 42, 38, 0.12);
-  --border-strong: rgba(29, 42, 38, 0.22);
-  --brand: #1c7c68;
-  --brand-strong: #145f50;
-  --accent: #d96f32;
-  --danger: #a63c2f;
-  --shadow: 0 20px 50px rgba(28, 58, 48, 0.12);
+  --background: #f7f9fc;
+  --background-strong: #edf1f6;
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-strong: rgba(255, 255, 255, 0.98);
+  --foreground: #20303d;
+  --muted: #718691;
+  --border: rgba(123, 144, 158, 0.18);
+  --border-strong: rgba(123, 144, 158, 0.28);
+  --brand: #173cff;
+  --brand-strong: #0e2dbf;
+  --accent: #ff1b1b;
+  --danger: #c32626;
+  --shadow: 0 20px 50px rgba(42, 66, 93, 0.12);
 }
 
 * {
@@ -23,9 +23,9 @@
 html {
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(217, 111, 50, 0.18), transparent 26%),
-    radial-gradient(circle at top right, rgba(28, 124, 104, 0.16), transparent 28%),
-    linear-gradient(180deg, #f9f4ec 0%, #f1e6d8 100%);
+    radial-gradient(circle at top left, rgba(255, 27, 27, 0.14), transparent 24%),
+    radial-gradient(circle at top right, rgba(23, 60, 255, 0.16), transparent 26%),
+    linear-gradient(180deg, #ffffff 0%, #eef3f9 100%);
 }
 
 body {
@@ -76,19 +76,19 @@ select {
   }
 
   .input-base {
-    @apply w-full rounded-2xl border px-4 py-3 outline-none transition;
+    @apply min-h-11 w-full rounded-2xl border px-4 py-3 text-base outline-none transition;
     border-color: var(--border-strong);
-    background: rgba(255, 255, 255, 0.78);
+    background: rgba(255, 255, 255, 0.92);
   }
 
   .input-base:focus {
-    border-color: color-mix(in srgb, var(--brand) 65%, white);
-    box-shadow: 0 0 0 4px rgba(28, 124, 104, 0.12);
+    border-color: color-mix(in srgb, var(--brand) 68%, white);
+    box-shadow: 0 0 0 4px rgba(23, 60, 255, 0.12);
   }
 
   .button-primary {
-    @apply inline-flex items-center justify-center rounded-2xl px-4 py-3 font-semibold text-white transition;
-    background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
+    @apply inline-flex min-h-11 items-center justify-center rounded-2xl px-4 py-3 text-center text-base font-semibold text-white transition;
+    background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
   }
 
   .button-primary:hover {
@@ -96,9 +96,9 @@ select {
   }
 
   .button-secondary {
-    @apply inline-flex items-center justify-center rounded-2xl px-4 py-3 font-semibold transition;
+    @apply inline-flex min-h-11 items-center justify-center rounded-2xl px-4 py-3 text-center text-base font-semibold transition;
     border: 1px solid var(--border-strong);
-    background: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.84);
   }
 
   .eyebrow {

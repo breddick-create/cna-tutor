@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getViewer } from "@/lib/auth/session";
+import { hasCompletedPretest, PRETEST_REQUIRED_MESSAGE } from "@/lib/onboarding/pretest";
 import { createClient } from "@/lib/supabase/server";
 import { getTutorLesson } from "@/lib/tutor/lessons";
 import { parseTutorSessionState, processTutorReply } from "@/lib/tutor/orchestrator";
@@ -22,6 +23,10 @@ export async function POST(request: Request) {
 
   if (viewer.profile.role !== "student") {
     return NextResponse.json({ error: "Only students can respond to tutor sessions." }, { status: 403 });
+  }
+
+  if (!hasCompletedPretest(viewer.user)) {
+    return NextResponse.json({ error: PRETEST_REQUIRED_MESSAGE }, { status: 403 });
   }
 
   const body = await request.json();
@@ -71,7 +76,7 @@ export async function POST(request: Request) {
   });
 
   if (studentTurnError) {
-    return NextResponse.json({ error: "Unable to save learner response." }, { status: 500 });
+    return NextResponse.json({ error: "We couldn't save your answer." }, { status: 500 });
   }
 
   const result = await processTutorReply({
@@ -93,7 +98,7 @@ export async function POST(request: Request) {
     .eq("id", session.id);
 
   if (updateSessionError) {
-    return NextResponse.json({ error: "Unable to update session." }, { status: 500 });
+    return NextResponse.json({ error: "We couldn't update this lesson." }, { status: 500 });
   }
 
   const { data: tutorTurn, error: tutorTurnError } = await supabase
@@ -109,7 +114,7 @@ export async function POST(request: Request) {
     .single();
 
   if (tutorTurnError || !tutorTurn) {
-    return NextResponse.json({ error: "Unable to save tutor feedback." }, { status: 500 });
+    return NextResponse.json({ error: "We couldn't save the tutor response." }, { status: 500 });
   }
 
   const tracking = await recordStudyInteraction({
@@ -159,3 +164,4 @@ export async function POST(request: Request) {
     },
   });
 }
+

@@ -2,10 +2,22 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getViewer } from "@/lib/auth/session";
+import {
+  getPretestDomainBreakdown,
+  getPretestScore,
+  hasCompletedPretest,
+  PRETEST_REQUIRED_MESSAGE,
+} from "@/lib/onboarding/pretest";
+import {
+  buildGuidedStudyPath,
+  getCompletedLessonIdsFromSessions,
+} from "@/lib/progression/study-path";
+import { getStudentProgressionSnapshot } from "@/lib/progression/student";
 import { createClient } from "@/lib/supabase/server";
 import { buildInitialTutorTurnForMode } from "@/lib/tutor/orchestrator";
 import { recordStudyInteraction } from "@/lib/tracking/activity";
 import type { TutorMode } from "@/lib/tutor/types";
+import { resolvePreferredLanguage } from "@/lib/i18n/languages";
 
 const createSessionSchema = z.object({
   lessonId: z.string().min(1),
@@ -32,6 +44,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Only students can start tutor sessions." }, { status: 403 });
   }
 
+  if (!hasCompletedPretest(viewer.user)) {
+    return NextResponse.json({ error: PRETEST_REQUIRED_MESSAGE }, { status: 403 });
+  }
+
   const body = await request.json();
   const parsed = createSessionSchema.safeParse(body);
 
@@ -40,12 +56,23 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  const { data: masteryRows } = await supabase
-    .from("domain_mastery")
-    .select("domain_id, mastery_score, weak_streak")
-    .eq("user_id", viewer.user.id)
-    .order("mastery_score", { ascending: true })
-    .limit(3);
+  const [progression, { data: masteryRows }, { data: studySessions }] = await Promise.all([
+    getStudentProgressionSnapshot({
+      userId: viewer.user.id,
+      pretestScore: getPretestScore(viewer.user),
+      pretestDomainBreakdown: getPretestDomainBreakdown(viewer.user),
+    }),
+    supabase
+      .from("domain_mastery")
+      .select("domain_id, mastery_score, weak_streak")
+      .eq("user_id", viewer.user.id)
+      .order("mastery_score", { ascending: true })
+      .limit(3),
+    supabase
+      .from("tutor_sessions")
+      .select("status, session_state_json")
+      .eq("user_id", viewer.user.id),
+  ]);
 
   const domainIds = (masteryRows ?? []).map((row) => row.domain_id);
   const { data: domains } = domainIds.length
@@ -57,10 +84,28 @@ export async function POST(request: Request) {
     .map((row) => titleMap.get(row.domain_id))
     .filter((title): title is string => Boolean(title));
 
+  const studyPath = buildGuidedStudyPath({
+    progression,
+    completedLessonIds: getCompletedLessonIdsFromSessions(studySessions ?? []),
+  });
+  const nextLessonId = studyPath.nextModule?.lesson?.id ?? null;
+
+  if (!nextLessonId || parsed.data.lessonId !== nextLessonId) {
+    return NextResponse.json(
+      {
+        error: studyPath.nextModule
+          ? `Finish ${studyPath.nextModule.domainTitle} before moving to another topic.`
+          : "Finish your current study step before starting another lesson.",
+      },
+      { status: 403 },
+    );
+  }
+
   const initialTurn = await buildInitialTutorTurnForMode({
     lessonId: parsed.data.lessonId,
     mode: parsed.data.mode as TutorMode | undefined,
     weakAreasSnapshot,
+    preferredLanguage: resolvePreferredLanguage(viewer.profile.preferred_language),
   });
 
   const { data: session, error: sessionError } = await supabase
@@ -75,7 +120,7 @@ export async function POST(request: Request) {
     .single();
 
   if (sessionError || !session) {
-    return NextResponse.json({ error: "Unable to create session." }, { status: 500 });
+    return NextResponse.json({ error: "We couldn't start that lesson." }, { status: 500 });
   }
 
   const { error: turnError } = await supabase.from("tutor_turns").insert({
@@ -86,7 +131,7 @@ export async function POST(request: Request) {
   });
 
   if (turnError) {
-    return NextResponse.json({ error: "Unable to save tutor turn." }, { status: 500 });
+    return NextResponse.json({ error: "We couldn't load the first tutor step." }, { status: 500 });
   }
 
   await recordStudyInteraction({
@@ -105,3 +150,5 @@ export async function POST(request: Request) {
     lessonId: initialTurn.lesson.id,
   });
 }
+
+

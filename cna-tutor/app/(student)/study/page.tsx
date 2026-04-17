@@ -1,198 +1,209 @@
 import Link from "next/link";
 
-import { StudyLauncher } from "@/components/tutor/study-launcher";
+import { GuidedStudyPath } from "@/components/student/guided-study-path";
+import { StudentEmptyState } from "@/components/student/student-empty-state";
+import { ContinueStudyCta } from "@/components/tutor/continue-study-cta";
 import { requireViewer } from "@/lib/auth/session";
-import { createClient } from "@/lib/supabase/server";
-import { listTutorLessons } from "@/lib/tutor/lessons";
+import { pickLocalizedText, resolvePreferredLanguage } from "@/lib/i18n/languages";
+import { getPretestDomainBreakdown, getPretestScore } from "@/lib/onboarding/pretest";
 import {
-  getRecommendedLessonsFromMastery,
-  getWeakAreaSummary,
-} from "@/lib/tutor/recommendations";
-import type { TutorLesson, TutorMode } from "@/lib/tutor/types";
+  buildGuidedStudyPath,
+  getCompletedLessonIdsFromSessions,
+  getLessonIdFromSessionState,
+  getPreferredStudyMode,
+  getResumableSessionForLesson,
+} from "@/lib/progression/study-path";
+import { getStudentProgressionSnapshot } from "@/lib/progression/student";
+import { createClient } from "@/lib/supabase/server";
+import { getTutorLesson } from "@/lib/tutor/lessons";
+import { getTutorModeLabel } from "@/lib/tutor/mode-labels";
 import { formatDateTime } from "@/lib/utils";
-
-function getPreferredMode(lesson: TutorLesson, weakDomainSlugs: Set<string>): TutorMode {
-  if (
-    weakDomainSlugs.has(lesson.domainSlug) &&
-    lesson.supportedModes.includes("weak_area_review")
-  ) {
-    return "weak_area_review";
-  }
-
-  if (lesson.supportedModes.includes("learn")) {
-    return "learn";
-  }
-
-  return lesson.defaultMode;
-}
 
 export default async function StudyPage() {
   const viewer = await requireViewer();
+  const language = resolvePreferredLanguage(viewer.profile.preferred_language);
+  const text = (en: string, es: string) => pickLocalizedText(language, { en, es });
   const supabase = await createClient();
-  const lessons = listTutorLessons();
 
-  const [{ data: sessions }, { data: rawMasteryRows }] = await Promise.all([
+  const [progression, { data: sessions }] = await Promise.all([
+    getStudentProgressionSnapshot({
+      userId: viewer.user.id,
+      pretestScore: getPretestScore(viewer.user),
+      pretestDomainBreakdown: getPretestDomainBreakdown(viewer.user),
+    }),
     supabase
       .from("tutor_sessions")
       .select("id, status, mode, last_activity_at, session_state_json")
       .eq("user_id", viewer.user.id)
       .order("last_activity_at", { ascending: false })
-      .limit(6),
-    supabase
-      .from("domain_mastery")
-      .select("domain_id, mastery_score, weak_streak")
-      .eq("user_id", viewer.user.id)
-      .order("mastery_score", { ascending: true })
-      .limit(6),
+      .limit(12),
   ]);
 
-  const domainIds = (rawMasteryRows ?? []).map((row) => row.domain_id);
-  const { data: domains } = domainIds.length
-    ? await supabase.from("domains").select("id, slug, title").in("id", domainIds)
-    : { data: [] };
-  const domainMap = new Map((domains ?? []).map((domain) => [domain.id, domain]));
-
-  const masteryRows = (rawMasteryRows ?? []).map((row) => ({
-    ...row,
-    domainTitle: domainMap.get(row.domain_id)?.title,
-    domainSlug: domainMap.get(row.domain_id)?.slug,
-  }));
-
-  const recommendedLessons = getRecommendedLessonsFromMastery(masteryRows);
-  const weakAreaSummary = getWeakAreaSummary(masteryRows);
-  const weakDomainSlugs = new Set(
-    masteryRows
-      .filter((row) => (row.domainSlug ? row.mastery_score < 75 || row.weak_streak > 0 : false))
-      .map((row) => row.domainSlug as string),
+  const studySessions = sessions ?? [];
+  const studyPath = buildGuidedStudyPath({
+    progression,
+    completedLessonIds: getCompletedLessonIdsFromSessions(studySessions),
+  });
+  const weakDomainSlugs = new Set(progression.weakAreas.map((area) => area.domainSlug));
+  const currentModule = studyPath.nextModule;
+  const currentLesson = currentModule?.lesson ?? null;
+  const resumableSession = getResumableSessionForLesson(
+    studySessions,
+    currentLesson?.id ?? null,
   );
+  const currentMode = currentLesson
+    ? getPreferredStudyMode(currentLesson, weakDomainSlugs)
+    : null;
+  const recentAllowedSessions = studySessions
+    .filter((session) => {
+      const lessonId = getLessonIdFromSessionState(session.session_state_json);
+      return lessonId ? studyPath.allowedLessonIds.has(lessonId) : false;
+    })
+    .slice(0, 6);
 
   return (
     <div className="space-y-8">
-      <section className="panel rounded-[1.75rem] p-6">
+      <section className="panel rounded-[1.75rem] p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="eyebrow">Teacher-Led Study</p>
-            <h2 className="mt-3 text-3xl font-semibold">Follow the next best lesson, not just any lesson.</h2>
+          <div className="min-w-0 flex-1">
+            <p className="eyebrow">{text("Guided Study", "Estudio guiado")}</p>
+            <h1 className="mt-3 text-3xl font-semibold">
+              {text(
+                "Continue the one module that is open right now.",
+                "Continua con el unico modulo que esta abierto ahora mismo.",
+              )}
+            </h1>
             <p className="text-muted mt-3 max-w-3xl leading-7">
-              The tutor leads each session, checks your understanding, and now uses your performance to
-              recommend what to review next.
+              Guided study is no longer a topic browser. The open module below is the next lesson
+              in your plan, based on your weakest areas and current progress.
+            </p>
+            <p className="mt-4 text-sm leading-6">
+              <span className="font-semibold">{text("Open now:", "Abierto ahora:")}</span>{" "}
+              {currentModule?.domainTitle ?? progression.nextBestTask.title}
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <Link className="button-secondary" href="/quiz">
-              Targeted quiz
-            </Link>
-            <Link className="button-secondary" href="/mock-exam">
-              Mock exam
-            </Link>
-          </div>
-        </div>
-        <div className="mt-5 flex flex-wrap gap-3">
-          {weakAreaSummary.length ? (
-            weakAreaSummary.map((area) => (
-              <span
-                key={area}
-                className="rounded-full bg-[rgba(217,111,50,0.14)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--accent)]"
-              >
-                Revisit {area}
-              </span>
-            ))
-          ) : (
-            <span className="rounded-full bg-[rgba(28,124,104,0.12)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--brand-strong)]">
-              No weak areas flagged yet
-            </span>
-          )}
-        </div>
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-3">
-        {recommendedLessons.map((lesson, index) => {
-          const preferredMode = getPreferredMode(lesson, weakDomainSlugs);
-
-          return (
-            <div key={lesson.id} className="panel rounded-[1.75rem] p-6">
-              <div className="flex items-center justify-between gap-4">
-                <p className="eyebrow">{index === 0 ? "Recommended Next" : "Keep Building"}</p>
-                <span className="rounded-full bg-[rgba(28,124,104,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--brand-strong)]">
-                  {preferredMode.replaceAll("_", " ")}
-                </span>
-              </div>
-              <h3 className="mt-3 text-2xl font-semibold">{lesson.title}</h3>
-              <p className="text-muted mt-3 text-sm leading-6">{lesson.summary}</p>
-              <p className="mt-4 text-sm leading-6">
-                <span className="font-semibold">Why now:</span>{" "}
-                {weakDomainSlugs.has(lesson.domainSlug)
-                  ? `This domain is showing up as a weak area, so the tutor should reteach it.`
-                  : `This is a strong next step to keep your exam prep moving.`}
-              </p>
-              <div className="mt-6">
-                <StudyLauncher
-                  defaultMode={lesson.defaultMode}
-                  initialMode={preferredMode}
-                  lessonId={lesson.id}
-                  supportedModes={lesson.supportedModes}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="panel rounded-[1.75rem] p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="eyebrow">All Guided Lessons</p>
-            <h3 className="mt-2 text-2xl font-semibold">Choose a topic or let the recommendations lead.</h3>
-          </div>
-          <Link className="button-secondary" href="/dashboard">
-            Back to dashboard
+          <Link className="button-secondary w-full sm:w-auto" href="/study-plan">
+            {text("View full study plan", "Ver plan de estudio completo")}
           </Link>
         </div>
 
-        <div className="mt-5 grid gap-5 xl:grid-cols-2">
-          {lessons.map((lesson) => (
-            <div
-              key={lesson.id}
-              className="rounded-[1.5rem] border border-[var(--border)] bg-white/70 p-5"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <p className="eyebrow">{lesson.domainTitle}</p>
-                <span className="text-muted text-xs font-semibold uppercase tracking-[0.16em]">
-                  {lesson.estimatedMinutes} min
-                </span>
-              </div>
-              <h4 className="mt-3 text-xl font-semibold">{lesson.title}</h4>
-              <p className="text-muted mt-3 text-sm leading-6">{lesson.summary}</p>
-              <p className="mt-3 text-sm leading-6">
-                <span className="font-semibold">Goal:</span> {lesson.learningGoal}
-              </p>
-              <div className="mt-5">
-                <StudyLauncher
-                  defaultMode={lesson.defaultMode}
-                  initialMode={getPreferredMode(lesson, weakDomainSlugs)}
-                  lessonId={lesson.id}
-                  supportedModes={lesson.supportedModes}
-                />
-              </div>
+        <div className="mt-5 rounded-[1.5rem] border border-[var(--border)] bg-white/80 p-4 sm:p-5">
+          <p className="text-sm font-semibold">{text("Start or resume now", "Inicia o retoma ahora")}</p>
+          <p className="text-muted mt-2 text-sm leading-6">
+            {text(
+              "Keep this control close on mobile. Open the current lesson here before you scroll through the rest of the plan.",
+              "Manten este control cerca en movil. Abre aqui la leccion actual antes de desplazarte por el resto del plan.",
+            )}
+          </p>
+          <div className="mt-4 max-w-md">
+            {currentLesson && currentMode ? (
+              <ContinueStudyCta
+                defaultMode={currentLesson.defaultMode}
+                initialMode={currentMode}
+                label={
+                  resumableSession
+                    ? `Continue ${currentLesson.title}`
+                    : `Continue with ${currentModule?.domainTitle ?? currentLesson.title}`
+                }
+                lessonId={currentLesson.id}
+                resumableSessionId={resumableSession?.id ?? null}
+                supportedModes={currentLesson.supportedModes}
+              />
+            ) : (
+              <Link className="button-primary inline-flex w-full items-center justify-center sm:w-auto" href={progression.nextBestTask.href}>
+                {text("Continue", "Continuar")}
+              </Link>
+            )}
+          </div>
+        </div>
+        <p className="text-muted mt-4 max-w-3xl text-sm leading-6">
+          Finish this lesson first. Then check the same topic with a practice quiz and section mock
+          before you expect the next module to unlock.
+        </p>
+      </section>
+
+      {currentModule ? (
+        <section className="panel-strong rounded-[1.75rem] p-6">
+          <p className="eyebrow">{text("Current Module", "Modulo actual")}</p>
+          <h2 className="mt-3 text-3xl font-semibold">{currentModule.domainTitle}</h2>
+          <p className="text-muted mt-3 max-w-3xl leading-7">{currentModule.description}</p>
+          <p className="mt-3 text-sm leading-6">
+            <span className="font-semibold">{text("Why this comes first:", "Por que esto va primero:")}</span>{" "}
+            {currentModule.recommendation}
+          </p>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/80 p-4">
+              <p className="text-sm font-semibold">{text("Current score", "Puntaje actual")}</p>
+              <p className="mt-2 text-2xl font-semibold">{currentModule.masteryScore}%</p>
             </div>
-          ))}
+            <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/80 p-4">
+              <p className="text-sm font-semibold">{text("Pre-test baseline", "Base de la preevaluacion")}</p>
+              <p className="mt-2 text-2xl font-semibold">{currentModule.baselineScore}%</p>
+            </div>
+            <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/80 p-4">
+              <p className="text-sm font-semibold">{text("Weak streak", "Racha debil")}</p>
+              <p className="mt-2 text-2xl font-semibold">{currentModule.weakStreak}</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {!currentModule ? (
+        <StudentEmptyState
+          description={text(
+            "You do not have a guided lesson open right now. Use the next required step to keep your readiness moving.",
+            "No tienes una leccion guiada abierta ahora mismo. Usa el siguiente paso requerido para seguir avanzando en tu preparacion.",
+          )}
+          eyebrow={text("Guided Study", "Estudio guiado")}
+          primaryAction={{
+            href: progression.nextBestTask.href,
+            label: text("Continue next step", "Continuar con el siguiente paso"),
+          }}
+          secondaryAction={{
+            href: "/dashboard",
+            label: text("Check progress", "Revisar progreso"),
+          }}
+          title={text("Your next guided step is ready.", "Tu siguiente paso guiado esta listo.")}
+        />
+      ) : null}
+
+      <section className="panel rounded-[1.75rem] p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="eyebrow">{text("Ordered Modules", "Modulos en orden")}</p>
+            <h2 className="mt-2 text-2xl font-semibold">
+              {text("Future modules stay locked until you reach them.", "Los modulos futuros permanecen bloqueados hasta que llegues a ellos.")}
+            </h2>
+            <p className="text-muted mt-3 max-w-3xl text-sm leading-6">
+              The order below follows the current study plan. You can resume the current module,
+              but you cannot jump ahead to another topic.
+            </p>
+          </div>
+          <p className="text-sm font-medium leading-6">
+            {currentModule
+              ? `${currentModule.domainTitle} is the only open module right now.`
+              : "Your next required step is ready."}
+          </p>
+        </div>
+
+        <div className="mt-5">
+          <GuidedStudyPath
+            currentModuleTitle={currentModule?.domainTitle ?? null}
+            modules={studyPath.modules}
+          />
         </div>
       </section>
 
       <section className="panel rounded-[1.75rem] p-6">
-        <p className="eyebrow">Recent Sessions</p>
-        <h3 className="mt-2 text-2xl font-semibold">Pick up where you left off.</h3>
+        <p className="eyebrow">{text("Recent Sessions", "Sesiones recientes")}</p>
+        <h3 className="mt-2 text-2xl font-semibold">
+          {text("Pick up the work you are allowed to continue.", "Retoma el trabajo que tienes permitido continuar.")}
+        </h3>
         <div className="mt-5 space-y-3">
-          {sessions?.length ? (
-            sessions.map((session) => {
-              const state =
-                session.session_state_json &&
-                typeof session.session_state_json === "object" &&
-                !Array.isArray(session.session_state_json) &&
-                "lessonId" in session.session_state_json
-                  ? String(session.session_state_json.lessonId)
-                  : null;
-              const lesson = state ? lessons.find((item) => item.id === state) : null;
+          {recentAllowedSessions.length ? (
+            recentAllowedSessions.map((session) => {
+              const lessonId = getLessonIdFromSessionState(session.session_state_json);
+              const lesson = lessonId ? getTutorLesson(lessonId) : null;
 
               return (
                 <Link
@@ -200,15 +211,15 @@ export default async function StudyPage() {
                   className="block rounded-3xl border border-[var(--border)] bg-white/70 p-4 transition hover:bg-white/90"
                   href={`/study/${session.id}`}
                 >
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
                       <p className="font-semibold">{lesson?.title ?? "Study session"}</p>
                       <p className="text-muted mt-1 text-sm">
-                        {session.mode.replaceAll("_", " ")} - Last activity{" "}
+                        {getTutorModeLabel(session.mode, language)} - {text("Last activity", "Ultima actividad")}{" "}
                         {formatDateTime(session.last_activity_at)}
                       </p>
                     </div>
-                    <span className="rounded-full bg-[rgba(28,124,104,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--brand-strong)]">
+                    <span className="rounded-full bg-[rgba(23,60,255,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--brand-strong)]">
                       {session.status}
                     </span>
                   </div>
@@ -216,10 +227,23 @@ export default async function StudyPage() {
               );
             })
           ) : (
-            <p className="text-muted rounded-3xl border border-[var(--border)] bg-white/70 p-4 text-sm">
-              No tutor sessions yet. Start with the recommended lesson and let the teacher guide
-              the first session.
-            </p>
+            <StudentEmptyState
+              compact
+              description={text(
+                "Once you start the current module, it will show up here so you can jump back in without guessing.",
+                "Cuando inicies el modulo actual, aparecera aqui para que puedas volver sin tener que adivinar.",
+              )}
+              eyebrow={text("Recent Sessions", "Sesiones recientes")}
+              primaryAction={{
+                href: "/study-plan",
+                label: text("Open study plan", "Abrir plan de estudio"),
+              }}
+              secondaryAction={{
+                href: "/dashboard",
+                label: text("Check progress", "Revisar progreso"),
+              }}
+              title={text("No resumable guided session yet.", "Todavia no hay una sesion guiada para retomar.")}
+            />
           )}
         </div>
       </section>

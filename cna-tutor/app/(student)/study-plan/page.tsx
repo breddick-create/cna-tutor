@@ -1,123 +1,198 @@
 import Link from "next/link";
 
+import { GuidedStudyPath } from "@/components/student/guided-study-path";
+import { ContinueStudyCta } from "@/components/tutor/continue-study-cta";
 import { requireViewer } from "@/lib/auth/session";
+import { pickLocalizedText, resolvePreferredLanguage } from "@/lib/i18n/languages";
+import { getPretestDomainBreakdown, getPretestScore } from "@/lib/onboarding/pretest";
+import {
+  buildGuidedStudyPath,
+  getCompletedLessonIdsFromSessions,
+  getPreferredStudyMode,
+  getResumableSessionForLesson,
+} from "@/lib/progression/study-path";
 import { createClient } from "@/lib/supabase/server";
-import { getRecommendedLessonsFromMastery, getWeakAreaSummary } from "@/lib/tutor/recommendations";
-import { listTutorLessons } from "@/lib/tutor/lessons";
-import { formatHours } from "@/lib/utils";
+import { getAdaptiveStudyPlan } from "@/lib/study-plan/generator";
 
 export default async function StudyPlanPage() {
   const viewer = await requireViewer();
+  const language = resolvePreferredLanguage(viewer.profile.preferred_language);
+  const text = (en: string, es: string) => pickLocalizedText(language, { en, es });
+  const pretestScore = getPretestScore(viewer.user);
+  const pretestDomainBreakdown = getPretestDomainBreakdown(viewer.user);
   const supabase = await createClient();
-  const lessons = listTutorLessons();
 
-  const [{ data: rawMasteryRows }, { data: statsRows }] = await Promise.all([
+  const [adaptivePlan, { data: studySessions }] = await Promise.all([
+    getAdaptiveStudyPlan({
+      userId: viewer.user.id,
+      pretestScore,
+      pretestDomainBreakdown,
+    }),
     supabase
-      .from("domain_mastery")
-      .select("domain_id, mastery_score, weak_streak")
+      .from("tutor_sessions")
+      .select("id, status, last_activity_at, session_state_json")
       .eq("user_id", viewer.user.id)
-      .order("mastery_score", { ascending: true })
-      .limit(6),
-    supabase.from("daily_user_stats").select("*").eq("user_id", viewer.user.id),
+      .order("last_activity_at", { ascending: false }),
   ]);
 
-  const domainIds = (rawMasteryRows ?? []).map((row) => row.domain_id);
-  const { data: domains } = domainIds.length
-    ? await supabase.from("domains").select("id, slug, title").in("id", domainIds)
-    : { data: [] };
-  const domainMap = new Map((domains ?? []).map((domain) => [domain.id, domain]));
-
-  const masteryRows = (rawMasteryRows ?? []).map((row) => ({
-    ...row,
-    domainTitle: domainMap.get(row.domain_id)?.title,
-    domainSlug: domainMap.get(row.domain_id)?.slug,
-  }));
-
-  const recommendedLessons = getRecommendedLessonsFromMastery(masteryRows);
-  const weakAreas = getWeakAreaSummary(masteryRows);
-  const activeSeconds = (statsRows ?? []).reduce((sum, row) => sum + row.active_seconds, 0);
-  const remainingGoalHours = Math.max(
-    0,
-    viewer.profile.study_goal_hours - Math.round((activeSeconds / 3600) * 10) / 10,
+  const studyPath = buildGuidedStudyPath({
+    progression: adaptivePlan.progression,
+    completedLessonIds: getCompletedLessonIdsFromSessions(studySessions ?? []),
+  });
+  const weakDomainSlugs = new Set(
+    adaptivePlan.progression.weakAreas.map((area) => area.domainSlug),
   );
-  const weeklyTargetHours = Math.max(3, Math.ceil(remainingGoalHours / 4));
+  const currentModule = studyPath.nextModule;
+  const currentLesson = currentModule?.lesson ?? null;
+  const resumableSession = getResumableSessionForLesson(
+    studySessions ?? [],
+    currentLesson?.id ?? null,
+  );
+  const currentMode = currentLesson
+    ? getPreferredStudyMode(currentLesson, weakDomainSlugs)
+    : null;
+  const continueLabel =
+    resumableSession && currentLesson
+      ? `Continue ${currentLesson.title}`
+      : currentLesson
+        ? `Continue with ${currentModule?.domainTitle ?? currentLesson.title}`
+        : "Continue";
+  const focusDomains = adaptivePlan.notes.firstFocus;
 
   return (
     <div className="space-y-8">
       <section className="panel rounded-[1.75rem] p-6">
-        <p className="eyebrow">Study Plan</p>
-        <h1 className="mt-3 text-3xl font-semibold">A simple weekly plan based on what needs work.</h1>
-        <p className="text-muted mt-3 max-w-3xl leading-7">
-          This plan keeps the schedule realistic for a solo learner: shore up weak areas first,
-          then cycle into quizzes and a mock exam.
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="eyebrow">{text("Study Plan", "Plan de estudio")}</p>
+            <h1 className="mt-3 text-3xl font-semibold">
+              {text("Follow the next module in order.", "Sigue el siguiente modulo en orden.")}
+            </h1>
+            <p className="text-muted mt-3 max-w-3xl leading-7">
+              {text(
+                "Your study plan is locked to the weakest-first path below. Finish the current module before the next topic opens so you always know what matters now.",
+                "Tu plan de estudio esta bloqueado a la ruta de temas mas debiles primero que aparece abajo. Termina el modulo actual antes de que se abra el siguiente tema para que siempre sepas que importa ahora.",
+              )}
+            </p>
+            <p className="mt-4 text-sm leading-6">
+              <span className="font-semibold">{text("Current focus:", "Enfoque actual:")}</span>{" "}
+              {currentModule?.domainTitle ?? adaptivePlan.nextStep.title}
+            </p>
+          </div>
+          <Link className="button-secondary" href="/dashboard">
+            {text("Check your progress", "Revisar tu progreso")}
+          </Link>
+        </div>
+
+        <div className="mt-6 max-w-md">
+          {currentLesson && currentMode ? (
+            <ContinueStudyCta
+              defaultMode={currentLesson.defaultMode}
+              initialMode={currentMode}
+              label={continueLabel}
+              lessonId={currentLesson.id}
+              resumableSessionId={resumableSession?.id ?? null}
+              supportedModes={currentLesson.supportedModes}
+            />
+          ) : (
+            <Link className="button-primary inline-flex items-center justify-center" href={adaptivePlan.nextStep.href}>
+              {text("Continue", "Continuar")}
+            </Link>
+          )}
+        </div>
+        <p className="text-muted mt-4 max-w-3xl text-sm leading-6">
+          {text(
+            "Start with the guided lesson. Then take the practice quiz and section mock for that same topic before you move down the list.",
+            "Empieza con la leccion guiada. Luego toma el quiz de practica y el examen por seccion de ese mismo tema antes de bajar en la lista.",
+          )}
         </p>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-3">
         <div className="panel rounded-[1.75rem] p-6">
-          <p className="eyebrow">Goal Pace</p>
-          <p className="mt-3 text-3xl font-semibold">{weeklyTargetHours}h / week</p>
+          <p className="eyebrow">{text("Pre-Test Snapshot", "Resumen de la preevaluacion")}</p>
+          <p className="mt-3 text-3xl font-semibold">{pretestScore ?? 0}%</p>
           <p className="text-muted mt-3 text-sm leading-6">
-            You have logged {formatHours(activeSeconds)} so far. At this pace, focusing on{" "}
-            {weeklyTargetHours} active hours per week keeps the target achievable.
+            {text(
+              "This score sets the opening order for your guided study path.",
+              "Este puntaje define el orden inicial de tu ruta de estudio guiado.",
+            )}
           </p>
         </div>
         <div className="panel rounded-[1.75rem] p-6">
-          <p className="eyebrow">Priority Domains</p>
+          <p className="eyebrow">{text("Next Step", "Siguiente paso")}</p>
+          <p className="mt-3 text-2xl font-semibold">{adaptivePlan.nextStep.title}</p>
+          <p className="text-muted mt-3 text-sm leading-6">
+            {adaptivePlan.nextStep.description}
+          </p>
+        </div>
+        <div className="panel rounded-[1.75rem] p-6">
+          <p className="eyebrow">{text("First Focus", "Primer enfoque")}</p>
           <p className="mt-3 text-lg font-semibold">
-            {weakAreas.length ? weakAreas.join(", ") : "Build breadth across all topics"}
+            {focusDomains.join(", ") || "Your top ranked sections"}
           </p>
           <p className="text-muted mt-3 text-sm leading-6">
-            These are the first domains to revisit in guided study this week.
-          </p>
-        </div>
-        <div className="panel rounded-[1.75rem] p-6">
-          <p className="eyebrow">Assessment Rhythm</p>
-          <p className="mt-3 text-lg font-semibold">2 quizzes + 1 mock exam each week</p>
-          <p className="text-muted mt-3 text-sm leading-6">
-            Use quizzes after each review block, then end the week with a broader mock exam.
+            {adaptivePlan.notes.sequencing}
           </p>
         </div>
       </section>
 
       <section className="panel rounded-[1.75rem] p-6">
-        <p className="eyebrow">Suggested Weekly Sequence</p>
+        <p className="eyebrow">{text("Weekly Rhythm", "Ritmo semanal")}</p>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-5">
-            <p className="text-sm font-semibold">1. Guided lesson block</p>
+            <p className="text-sm font-semibold">{text("1. Finish the current module", "1. Termina el modulo actual")}</p>
             <p className="text-muted mt-2 text-sm leading-6">
-              Start with {recommendedLessons[0]?.title ?? lessons[0]?.title ?? "your weakest lesson"} in weak-area review or learn mode.
+              Stay with the open topic until you finish the guided lesson and understand the core ideas.
             </p>
           </div>
           <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-5">
-            <p className="text-sm font-semibold">2. Quick quiz check</p>
+            <p className="text-sm font-semibold">{text("2. Check it with a practice quiz", "2. Compruebalo con un quiz de practica")}</p>
             <p className="text-muted mt-2 text-sm leading-6">
-              Run a targeted quiz right after the lesson to see what still needs correction.
+              Use the 10-question quiz right after the lesson so you know whether the topic is sticking.
             </p>
           </div>
           <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-5">
-            <p className="text-sm font-semibold">3. Second guided review</p>
+            <p className="text-sm font-semibold">{text("3. Prove it with the section mock", "3. Compruebalo con el examen por seccion")}</p>
             <p className="text-muted mt-2 text-sm leading-6">
-              Move to the next recommended lesson and keep the teacher-led repetition going.
+              Finish the section mock before you expect the next topic to open.
             </p>
           </div>
           <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-5">
-            <p className="text-sm font-semibold">4. Mock exam finish</p>
+            <p className="text-sm font-semibold">{text("4. Save the full practice exam for later", "4. Deja el examen completo para despues")}</p>
             <p className="text-muted mt-2 text-sm leading-6">
-              End the week with a mock exam, then loop any weak domains back into study.
+              {adaptivePlan.notes.practiceExam}
             </p>
           </div>
         </div>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link className="button-primary" href="/study">
-            Start guided study
-          </Link>
-          <Link className="button-secondary" href="/quiz">
-            Take a quiz
-          </Link>
-          <Link className="button-secondary" href="/mock-exam">
-            Run mock exam
-          </Link>
+      </section>
+
+      <section className="panel rounded-[1.75rem] p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="eyebrow">{text("Ordered Modules", "Modulos en orden")}</p>
+            <h2 className="mt-2 text-2xl font-semibold">
+              {text("Study topics open one at a time.", "Los temas de estudio se abren uno por uno.")}
+            </h2>
+            <p className="text-muted mt-3 max-w-3xl text-sm leading-6">
+              {text(
+                "Completed modules stay behind you. The current module stays open. Future modules stay locked until you reach them in order.",
+                "Los modulos completados quedan atras. El modulo actual sigue abierto. Los modulos futuros permanecen bloqueados hasta que llegues a ellos en orden.",
+              )}
+            </p>
+          </div>
+          <p className="text-sm font-medium leading-6">
+            {currentModule
+              ? text(`${currentModule.domainTitle} is your current module.`, `${currentModule.domainTitle} es tu modulo actual.`)
+              : text("Your next required step is ready.", "Tu siguiente paso requerido ya esta listo.")}
+          </p>
+        </div>
+
+        <div className="mt-5">
+          <GuidedStudyPath
+            currentModuleTitle={currentModule?.domainTitle ?? null}
+            modules={studyPath.modules}
+          />
         </div>
       </section>
     </div>

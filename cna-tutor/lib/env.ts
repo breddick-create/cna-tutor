@@ -12,6 +12,12 @@ export const env = {
   get appUrl() {
     return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   },
+  get supportEmail() {
+    return process.env.NEXT_PUBLIC_SUPPORT_EMAIL?.trim() ?? "";
+  },
+  get adminSignUpCode() {
+    return process.env.ADMIN_SIGN_UP_CODE?.trim() ?? "";
+  },
   get supabaseUrl() {
     return required("NEXT_PUBLIC_SUPABASE_URL");
   },

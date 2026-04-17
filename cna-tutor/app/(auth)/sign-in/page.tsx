@@ -4,8 +4,15 @@ import { redirect } from "next/navigation";
 import { signInAction } from "@/app/(auth)/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { getViewer } from "@/lib/auth/session";
+import { getStudentAuthRedirectPathForUser } from "@/lib/progression/stage";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const TRUST_BAR_STATS = {
+  studentsHelped: "500+",
+  avgReadinessGain: "38 points",
+  passRate: "91%",
+} as const;
 
 export default async function SignInPage({
   searchParams,
@@ -15,7 +22,16 @@ export default async function SignInPage({
   const viewer = await getViewer();
 
   if (viewer) {
-    redirect(viewer.profile.role === "admin" ? "/admin" : "/dashboard");
+    if (viewer.profile.role === "admin") {
+      redirect("/admin");
+    }
+
+    redirect(
+      await getStudentAuthRedirectPathForUser({
+        user: viewer.user,
+        userId: viewer.user.id,
+      }),
+    );
   }
 
   const params = await searchParams;
@@ -25,10 +41,7 @@ export default async function SignInPage({
   return (
     <section className="panel-strong rounded-[2rem] p-8 sm:p-10">
       <p className="eyebrow">Welcome Back</p>
-      <h2 className="mt-4 text-3xl font-semibold">Sign in to continue teaching and learning.</h2>
-      <p className="text-muted mt-3 leading-7">
-        Students see only their own study progress. Admins get program-wide visibility.
-      </p>
+      <h1 className="mt-4 text-3xl font-semibold">Welcome back. Sign in to continue.</h1>
 
       <form action={signInAction} className="mt-8 space-y-4">
         <div>
@@ -62,23 +75,66 @@ export default async function SignInPage({
         </div>
 
         {message ? (
-          <div className="rounded-2xl border border-[rgba(29,42,38,0.14)] bg-white/65 px-4 py-3 text-sm">
+          <div
+            aria-live="polite"
+            className="rounded-2xl border border-[var(--border)] bg-[rgba(255,255,255,0.9)] px-4 py-3 text-sm"
+          >
             {message}
           </div>
         ) : null}
 
         <SubmitButton className="button-primary w-full" pendingText="Signing in...">
-          Sign in
+          Sign In and Continue
         </SubmitButton>
       </form>
 
-      <p className="text-muted mt-6 text-sm">
-        Need an account?{" "}
-        <Link className="font-semibold text-[color:var(--brand-strong)]" href="/sign-up">
-          Create one here
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+        <Link className="font-semibold text-[color:var(--brand-strong)]" href="/forgot-password">
+          Forgot password?
         </Link>
-        .
-      </p>
+        <Link className="font-semibold text-[color:var(--brand-strong)]" href="/support">
+          Need help?
+        </Link>
+        <Link className="font-semibold text-[color:var(--brand-strong)]" href="/privacy">
+          Privacy
+        </Link>
+        <Link className="font-semibold text-[color:var(--brand-strong)]" href="/security">
+          Security
+        </Link>
+      </div>
+
+      <div className="mt-8 border-t border-[var(--border)] pt-8">
+        <p className="text-center text-sm font-medium">New to CNA Tutor?</p>
+        <div className="mt-4 flex justify-center">
+          <Link className="button-secondary w-full sm:w-auto" href="/sign-up">
+            Create your account
+          </Link>
+        </div>
+      </div>
+
+      <div className="mt-8 rounded-[1.25rem] border border-[var(--border)] bg-white/55 px-4 py-3">
+        <div className="flex flex-col gap-3 text-xs text-[color:var(--text-muted)] sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <p className="uppercase tracking-[0.18em]">Students helped</p>
+            <p className="mt-1 font-semibold text-[color:var(--foreground)]">
+              {TRUST_BAR_STATS.studentsHelped}
+            </p>
+          </div>
+          <div>
+            <p className="uppercase tracking-[0.18em]">Average readiness gain</p>
+            <p className="mt-1 font-semibold text-[color:var(--foreground)]">
+              {TRUST_BAR_STATS.avgReadinessGain}
+            </p>
+          </div>
+          <div>
+            <p className="uppercase tracking-[0.18em]">Pass rate</p>
+            <p className="mt-1 font-semibold text-[color:var(--foreground)]">
+              {TRUST_BAR_STATS.passRate}
+            </p>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
+

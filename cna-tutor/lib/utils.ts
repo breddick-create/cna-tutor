@@ -11,7 +11,7 @@ export function formatShortDate(value: string) {
 
 export function formatDateTime(value: string | null) {
   if (!value) {
-    return "No activity yet";
+    return "You haven’t started yet";
   }
 
   return new Intl.DateTimeFormat("en-US", {

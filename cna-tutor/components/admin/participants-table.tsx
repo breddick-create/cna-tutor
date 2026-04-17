@@ -1,3 +1,19 @@
+function getStatusTone(status: string) {
+  if (status === "Exam ready") {
+    return "bg-[rgba(23,60,255,0.12)] text-[color:var(--brand-strong)]";
+  }
+
+  if (status === "Progressing") {
+    return "bg-[rgba(255,185,0,0.16)] text-[color:#7a5700]";
+  }
+
+  if (status === "Pre-test not completed") {
+    return "bg-[rgba(123,144,158,0.14)] text-[color:var(--foreground)]";
+  }
+
+  return "bg-[rgba(166,60,47,0.12)] text-[color:var(--danger)]";
+}
+
 export function ParticipantsTable({
   rows,
 }: {
@@ -6,37 +22,31 @@ export function ParticipantsTable({
     name: string;
     email: string;
     cohort: string;
-    totalHours: string;
+    statusLabel: string;
+    readinessLabel: string;
+    readinessScore: number | null;
+    weakAreasPreview: string;
+    nextAction: string;
     activeHours: string;
     lessonsCompleted: number;
     quizzesTaken: number;
     mockExamsTaken: number;
-    averageScore: number;
-    masteryLevel: string;
-    masteryScore: number;
-    lastLogin: string;
     lastActivity: string;
-    completionPercent: number;
   }>;
 }) {
   return (
     <div className="overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-white/75">
       <div className="overflow-x-auto">
         <table className="min-w-full border-collapse text-left text-sm">
-          <thead className="bg-[rgba(29,42,38,0.04)]">
+          <thead className="bg-[rgba(123,144,158,0.08)]">
             <tr>
-              <th className="px-4 py-3 font-medium">Participant</th>
-              <th className="px-4 py-3 font-medium">Cohort</th>
-              <th className="px-4 py-3 font-medium">Total Hours</th>
-              <th className="px-4 py-3 font-medium">Active Hours</th>
-              <th className="px-4 py-3 font-medium">Lessons</th>
-              <th className="px-4 py-3 font-medium">Quizzes</th>
-              <th className="px-4 py-3 font-medium">Mock Exams</th>
-              <th className="px-4 py-3 font-medium">Avg Score</th>
-              <th className="px-4 py-3 font-medium">Mastery</th>
-              <th className="px-4 py-3 font-medium">Last Login</th>
-              <th className="px-4 py-3 font-medium">Last Activity</th>
-              <th className="px-4 py-3 font-medium">Completion</th>
+              <th className="px-4 py-3 font-medium">Student</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Readiness</th>
+              <th className="px-4 py-3 font-medium">Activity</th>
+              <th className="px-4 py-3 font-medium">Work Completed</th>
+              <th className="px-4 py-3 font-medium">Weak Areas</th>
+              <th className="px-4 py-3 font-medium">Next Action</th>
             </tr>
           </thead>
           <tbody>
@@ -46,26 +56,42 @@ export function ParticipantsTable({
                   <td className="px-4 py-3">
                     <p className="font-medium">{row.name}</p>
                     <p className="text-muted mt-1 text-xs">{row.email}</p>
+                    <p className="text-muted mt-1 text-xs uppercase tracking-[0.16em]">{row.cohort}</p>
                   </td>
-                  <td className="px-4 py-3">{row.cohort}</td>
-                  <td className="px-4 py-3">{row.totalHours}</td>
-                  <td className="px-4 py-3">{row.activeHours}</td>
-                  <td className="px-4 py-3">{row.lessonsCompleted}</td>
-                  <td className="px-4 py-3">{row.quizzesTaken}</td>
-                  <td className="px-4 py-3">{row.mockExamsTaken}</td>
-                  <td className="px-4 py-3">{row.averageScore}%</td>
                   <td className="px-4 py-3">
-                    <p className="font-medium">{row.masteryLevel}</p>
-                    <p className="text-muted mt-1 text-xs">{row.masteryScore}% mastery</p>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getStatusTone(row.statusLabel)}`}
+                    >
+                      {row.statusLabel}
+                    </span>
                   </td>
-                  <td className="px-4 py-3">{row.lastLogin}</td>
-                  <td className="px-4 py-3">{row.lastActivity}</td>
-                  <td className="px-4 py-3">{row.completionPercent}%</td>
+                  <td className="px-4 py-3">
+                    <p className="font-medium">
+                      {row.readinessScore !== null ? `${row.readinessScore}%` : "Not scored yet"}
+                    </p>
+                    <p className="text-muted mt-1 text-xs">{row.readinessLabel}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p>{row.activeHours}</p>
+                    <p className="text-muted mt-1 text-xs">{row.lastActivity}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p>{row.lessonsCompleted} lessons</p>
+                    <p className="text-muted mt-1 text-xs">
+                      {row.quizzesTaken} quizzes, {row.mockExamsTaken} full mocks
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="max-w-xs leading-6">{row.weakAreasPreview}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="max-w-sm leading-6">{row.nextAction}</p>
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td className="px-4 py-6 text-sm text-[color:var(--muted)]" colSpan={12}>
+                <td className="px-4 py-6 text-sm text-[color:var(--muted)]" colSpan={7}>
                   No participants match the current filter set.
                 </td>
               </tr>

@@ -1,3 +1,4 @@
+import type { SupportedLanguage } from "@/lib/i18n/languages";
 import type { Database } from "@/types/database";
 
 export type TutorMode = Database["public"]["Tables"]["tutor_sessions"]["Row"]["mode"];
@@ -49,6 +50,7 @@ export type TutorLesson = {
 export type TutorSessionState = {
   lessonId: string;
   mode: TutorMode;
+  preferredLanguage: SupportedLanguage;
   currentSegmentIndex: number;
   step: TutorStep;
   attemptsOnCurrentQuestion: number;

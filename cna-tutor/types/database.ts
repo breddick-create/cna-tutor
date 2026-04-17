@@ -34,6 +34,7 @@ export type Database = {
           metadata_json?: Json;
           occurred_at?: string;
         };
+        Relationships: [];
       };
       daily_user_stats: {
         Row: {
@@ -78,6 +79,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       domain_mastery: {
         Row: {
@@ -110,6 +112,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       domains: {
         Row: {
@@ -136,6 +139,7 @@ export type Database = {
           sort_order?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       lessons: {
         Row: {
@@ -192,6 +196,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       mock_exam_attempts: {
         Row: {
@@ -224,6 +229,7 @@ export type Database = {
           completed_at?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -232,6 +238,7 @@ export type Database = {
           full_name: string;
           email: string;
           cohort: string | null;
+          preferred_language: string;
           study_goal_hours: number;
           last_login_at: string | null;
           last_activity_at: string | null;
@@ -244,6 +251,7 @@ export type Database = {
           full_name: string;
           email: string;
           cohort?: string | null;
+          preferred_language?: string;
           study_goal_hours?: number;
           last_login_at?: string | null;
           last_activity_at?: string | null;
@@ -256,12 +264,14 @@ export type Database = {
           full_name?: string;
           email?: string;
           cohort?: string | null;
+          preferred_language?: string;
           study_goal_hours?: number;
           last_login_at?: string | null;
           last_activity_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       question_bank: {
         Row: {
@@ -303,6 +313,7 @@ export type Database = {
           difficulty?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       quiz_attempts: {
         Row: {
@@ -310,6 +321,8 @@ export type Database = {
           user_id: string;
           lesson_id: string | null;
           domain_id: string | null;
+          confidence_level: string | null;
+          confidence_score: number | null;
           score: number;
           total_questions: number;
           started_at: string;
@@ -321,6 +334,8 @@ export type Database = {
           user_id: string;
           lesson_id?: string | null;
           domain_id?: string | null;
+          confidence_level?: string | null;
+          confidence_score?: number | null;
           score?: number;
           total_questions?: number;
           started_at?: string;
@@ -332,12 +347,15 @@ export type Database = {
           user_id?: string;
           lesson_id?: string | null;
           domain_id?: string | null;
+          confidence_level?: string | null;
+          confidence_score?: number | null;
           score?: number;
           total_questions?: number;
           started_at?: string;
           completed_at?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       tutor_sessions: {
         Row: {
@@ -409,6 +427,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       tutor_turns: {
         Row: {
@@ -438,7 +457,16 @@ export type Database = {
           correctness?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
+    Views: {};
+    Functions: {};
+    Enums: {};
+    CompositeTypes: {};
   };
 };
+
+
+
+

@@ -15,7 +15,7 @@ const mono = Source_Code_Pro({
 
 export const metadata: Metadata = {
   title: "CNA Tutor",
-  description: "AI-guided Texas CNA written exam tutoring platform",
+  description: "A guided study app to help you get ready for the Texas CNA written exam",
 };
 
 export default function RootLayout({
@@ -29,3 +29,4 @@ export default function RootLayout({
     </html>
   );
 }
+

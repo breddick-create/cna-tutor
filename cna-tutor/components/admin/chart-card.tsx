@@ -21,7 +21,7 @@ export function ChartCard({
                 <span>{item.label}</span>
                 <span className="font-semibold">{item.value}</span>
               </div>
-              <div className="h-3 overflow-hidden rounded-full bg-[rgba(29,42,38,0.08)]">
+              <div className="h-3 overflow-hidden rounded-full bg-[rgba(123,144,158,0.14)]">
                 <div
                   className="h-full rounded-full bg-[linear-gradient(135deg,var(--brand),var(--accent))]"
                   style={{ width: `${Math.max(8, (item.value / maxValue) * 100)}%` }}
@@ -36,3 +36,4 @@ export function ChartCard({
     </div>
   );
 }
+
