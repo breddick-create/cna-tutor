@@ -24,7 +24,7 @@ export default function SecurityPage() {
 
         <section className="panel rounded-[2rem] p-8">
           <p className="eyebrow">Security</p>
-          <h1 className="mt-4 text-4xl font-semibold">How CNA Tutor protects your account.</h1>
+          <h1 className="mt-4 text-4xl font-semibold">How HCCI Tutor protects your account.</h1>
           <div className="text-muted mt-6 space-y-5 leading-8">
             <p>
               Sign-in is handled through a managed provider, with secure sessions used across the app.

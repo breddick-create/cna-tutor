@@ -11,7 +11,7 @@ export default async function AdminLayout({
   return (
     <AppShell
       roleLabel="Admin"
-      title="CNA Tutor Admin"
+      title="HCCI Tutor Admin"
       subtitle="Monitor learner engagement, progress, and completion."
       email={viewer.profile.email}
     >

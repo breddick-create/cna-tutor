@@ -47,8 +47,8 @@ export default async function CcmaHomePage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Link className="font-semibold text-[color:var(--brand-strong)]" href="https://cna-tutor.vercel.app/" target="_blank" rel="noopener noreferrer">
-                CNA Tutor
+              <Link className="font-semibold text-[color:var(--brand-strong)]" href="https://hcci-tutor.vercel.app/" target="_blank" rel="noopener noreferrer">
+                HCCI Tutor
               </Link>
               <Link className="font-semibold text-[color:var(--brand-strong)]" href="/support">
                 Need help?

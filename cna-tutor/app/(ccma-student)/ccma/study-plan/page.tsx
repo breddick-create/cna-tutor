@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { ContinueStudyCta } from "@/components/ccma/continue-study-cta";
-import { GuidedStudyPath } from "@/components/student/guided-study-path";
+import { GuidedStudyPath } from "@/components/ccma/guided-study-path";
 import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import { pickLocalizedText, resolvePreferredLanguage } from "@/lib/ccma/i18n/languages";
 import { getPretestDomainBreakdown, getPretestScore } from "@/lib/ccma/onboarding/pretest";

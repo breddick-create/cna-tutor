@@ -50,8 +50,21 @@ function buildProfilePayload(user: User, overrides?: Partial<CcmaProfile>) {
 }
 
 export async function ensureCcmaProfileForUser(user: User, roleOverride?: "student" | "admin") {
-  const admin = createCcmaAdminClient();
   const payload = buildProfilePayload(user, roleOverride ? { role: roleOverride } : undefined);
+
+  // Try authenticated user client first (satisfies RLS auth.uid() = id policies)
+  const userClient = await createCcmaClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: userData } = await (userClient as any)
+    .from("profiles")
+    .upsert(payload, { onConflict: "id" })
+    .select("*")
+    .single();
+
+  if (userData) return userData as CcmaProfile;
+
+  // Fall back to admin client (service_role bypasses RLS)
+  const admin = createCcmaAdminClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (admin as any)
     .from("profiles")
@@ -82,11 +95,14 @@ export const getCcmaViewer = cache(async (): Promise<CcmaViewer | null> => {
     .from("profiles")
     .select("*")
     .eq("id", user.id)
-    .eq("product", "ccma")
-    .single();
+    .maybeSingle();
 
   const profile: CcmaProfile | null =
-    rawProfile ?? (await ensureCcmaProfileForUser(user));
+    rawProfile?.product === "ccma"
+      ? rawProfile
+      : !rawProfile && user.user_metadata?.product === "ccma"
+        ? await ensureCcmaProfileForUser(user)
+        : null;
 
   if (!profile) {
     return null;
@@ -117,4 +133,3 @@ export async function requireCcmaAdmin() {
 
   return viewer;
 }
-

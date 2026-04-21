@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 import { requestPasswordResetAction } from "@/app/(auth)/actions";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { getViewer } from "@/lib/auth/session";
+import {
+  getProductAdminPath,
+  getStudentAuthRedirectPathForProduct,
+  resolveEffectiveProductTrack,
+} from "@/lib/auth/product-routing";
+import { getViewer, resolveProductFromProfile } from "@/lib/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -16,7 +21,19 @@ export default async function ForgotPasswordPage({
   const viewer = await getViewer();
 
   if (viewer) {
-    redirect(viewer.profile.role === "admin" ? "/admin" : "/dashboard");
+    const product = await resolveEffectiveProductTrack({
+      userId: viewer.user.id,
+      profileProduct: resolveProductFromProfile(viewer.profile),
+    });
+    redirect(
+      viewer.profile.role === "admin"
+        ? getProductAdminPath(product)
+        : await getStudentAuthRedirectPathForProduct({
+            product,
+            user: viewer.user,
+            userId: viewer.user.id,
+          }),
+    );
   }
 
   const params = await searchParams;

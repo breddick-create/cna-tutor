@@ -559,7 +559,7 @@ export default async function StudentDashboardPage({
             <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/75 p-5">
               <p className="text-sm font-semibold">What you can review now</p>
               <p className="mt-2 text-sm leading-6">
-                Open your exam-day page for the Texas CNA checklist, your readiness summary, and the final confidence message from ACAM before test day.
+                Open your exam-day page for the Texas CNA checklist, your readiness summary, and the final confidence message from HCCI before test day.
               </p>
             </div>
             <div className="mt-5">

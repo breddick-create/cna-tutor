@@ -16,6 +16,128 @@ function normalizeText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
 }
 
+function getWords(value: string) {
+  return normalizeText(value)
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
+const unsafeContradictionPhrases = [
+  "do nothing",
+  "ignore",
+  "wait until later",
+  "finish the meal",
+  "leave them",
+  "leave the resident",
+  "help them up right away",
+  "move them right away",
+  "skip hand hygiene",
+  "dont report",
+  "don t report",
+  "do not report",
+  "never report",
+  "share private information",
+];
+
+function includesNormalizedPhrase(value: string, phrase: string) {
+  return normalizeText(value).includes(normalizeText(phrase));
+}
+
+function keywordMatches(normalizedStudentMessage: string, keyword: string) {
+  const normalizedKeyword = normalizeText(keyword).trim();
+
+  if (!normalizedKeyword) {
+    return false;
+  }
+
+  const studentWords = new Set(getWords(normalizedStudentMessage));
+  const keywordWords = getWords(normalizedKeyword);
+
+  if (keywordWords.length <= 1) {
+    return studentWords.has(normalizedKeyword);
+  }
+
+  return normalizedStudentMessage
+    .split(/\s+/)
+    .join(" ")
+    .includes(keywordWords.join(" "));
+}
+
+function conceptMatchesStudentAnswer(
+  normalizedStudentMessage: string,
+  concept: LessonSegment["acceptableConcepts"][number],
+) {
+  const normalizedKeywords = concept.keywords
+    .map((keyword) => normalizeText(keyword).trim())
+    .filter(Boolean);
+  const phraseMatched = normalizedKeywords.some(
+    (keyword) => keyword.includes(" ") && keywordMatches(normalizedStudentMessage, keyword),
+  );
+
+  if (phraseMatched) {
+    return true;
+  }
+
+  const tokenHits = normalizedKeywords.filter(
+    (keyword) => !keyword.includes(" ") && keywordMatches(normalizedStudentMessage, keyword),
+  ).length;
+  const requiredTokenHits = normalizedKeywords.length <= 1 ? 1 : 2;
+
+  return tokenHits >= requiredTokenHits;
+}
+
+function hasUnsafeContradiction(segment: LessonSegment, studentMessage: string) {
+  const combinedSegmentText = normalizeText(
+    [
+      segment.concept,
+      segment.example,
+      segment.question,
+      segment.idealAnswer,
+      segment.correctExplanation,
+      segment.incorrectExplanation,
+    ].join(" "),
+  );
+  const safetyOrScopeQuestion =
+    /\b(report|notify|nurse|help|emergency|choking|fall|privacy|dignity|infection|hand hygiene|glove|ppe|standard precaution|do not move|do not share)\b/.test(
+      combinedSegmentText,
+    );
+
+  if (!safetyOrScopeQuestion) {
+    return false;
+  }
+
+  return unsafeContradictionPhrases.some((phrase) =>
+    includesNormalizedPhrase(studentMessage, phrase),
+  );
+}
+
+function isTooVagueForMastery(
+  segment: LessonSegment,
+  studentMessage: string,
+  matchedConcepts: string[],
+) {
+  const words = getWords(studentMessage);
+
+  if (matchedConcepts.length < segment.passThreshold) {
+    return false;
+  }
+
+  if (segment.passThreshold > 1 && words.length <= 2) {
+    return true;
+  }
+
+  if (segment.questionType === "scenario" && words.length < 5) {
+    return true;
+  }
+
+  if (segment.questionType === "critical_thinking" && words.length < 6) {
+    return true;
+  }
+
+  return false;
+}
+
 function getCurrentSegment(lesson: TutorLesson, state: TutorSessionState) {
   return lesson.segments[Math.min(state.currentSegmentIndex, lesson.segments.length - 1)];
 }
@@ -160,16 +282,17 @@ export function evaluateStudentAnswer(
   const normalized = normalizeText(studentMessage);
 
   const matchedConcepts = segment.acceptableConcepts
-    .filter((concept) =>
-      concept.keywords.some((keyword) => normalized.includes(normalizeText(keyword))),
-    )
+    .filter((concept) => conceptMatchesStudentAnswer(normalized, concept))
     .map((concept) => concept.label);
 
   const missedConcepts = segment.acceptableConcepts
     .map((concept) => concept.label)
     .filter((label) => !matchedConcepts.includes(label));
 
-  const correct = matchedConcepts.length >= segment.passThreshold;
+  const hasRequiredConcepts = matchedConcepts.length >= segment.passThreshold;
+  const unsafeContradiction = hasUnsafeContradiction(segment, studentMessage);
+  const tooVagueForMastery = isTooVagueForMastery(segment, studentMessage, matchedConcepts);
+  const correct = hasRequiredConcepts && !unsafeContradiction && !tooVagueForMastery;
   const score = Math.min(
     100,
     Math.round((matchedConcepts.length / segment.acceptableConcepts.length) * 100),
@@ -178,7 +301,11 @@ export function evaluateStudentAnswer(
   return {
     correct,
     matchedConcepts,
-    missedConcepts,
+    missedConcepts: [
+      ...missedConcepts,
+      unsafeContradiction ? "safe CNA action" : null,
+      tooVagueForMastery ? "complete direct answer" : null,
+    ].filter((concept): concept is string => Boolean(concept)),
     score,
     idealAnswer: segment.idealAnswer,
     correctExplanation: segment.correctExplanation,
@@ -285,6 +412,9 @@ function renderFallbackMessage(context: TutorMessageContext) {
     return [
       context.evaluation?.incorrectExplanation ??
         "Not quite. Let's tighten up the reasoning together.",
+      context.evaluation?.missedConcepts.length
+        ? `What was missing: ${context.evaluation.missedConcepts.join(", ")}.`
+        : null,
       context.state.remediationLevel > 1
         ? `Let's slow this down. The missing idea is: ${context.evaluation?.idealAnswer}`
         : null,
@@ -316,6 +446,8 @@ async function generateModelMessage(context: TutorMessageContext) {
     `Current segment concept: ${context.segment.concept}`,
     `Current segment example: ${context.segment.example}`,
     `Current segment checkpoint question: ${context.segment.question}`,
+    context.segment.questionType ? `Question type: ${context.segment.questionType}` : null,
+    context.segment.difficulty ? `Question difficulty: ${context.segment.difficulty}` : null,
     `Action: ${context.action}`,
     `Tutoring mode: ${context.state.mode}`,
     `Preferred teaching language: ${context.state.preferredLanguage}`,
@@ -335,6 +467,12 @@ async function generateModelMessage(context: TutorMessageContext) {
     context.evaluation
       ? `Use this memory tip if needed: ${context.evaluation.memoryTip}`
       : `Ask the checkpoint question at the end.`,
+    context.action === "retry"
+      ? `Mastery rule: do not advance. Explain precisely why the answer was incomplete or inaccurate, name the missed concept, reteach briefly, and ask the same question or a close follow-up.`
+      : null,
+    context.action === "wrap"
+      ? `Summary rule: close with concise key takeaways the student should remember for the Texas CNA exam.`
+      : null,
     context.state.mode === "quiz"
       ? `Mode rules: keep teaching minimal, ask the checkpoint quickly, and frame feedback like a guided exam coach.`
       : null,
@@ -345,8 +483,8 @@ async function generateModelMessage(context: TutorMessageContext) {
       ? `Mode rules: reinforce the weak idea with patient, repetitive coaching and a simple memory anchor.`
       : null,
     context.action === "wrap"
-      ? `Output rules: keep it under 140 words, sound like a supportive CNA instructor, recap the lesson, celebrate progress, and do not end with a question.`
-      : `Output rules: keep it under 140 words, sound like a supportive CNA instructor, and end with exactly one clear question.`,
+      ? `Output rules: keep it under 180 words, sound like a supportive CNA instructor, recap the lesson, celebrate progress, and do not end with a question.`
+      : `Output rules: keep it under 180 words, sound like a supportive CNA instructor, evaluate strictly, and end with exactly one clear question.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -361,7 +499,7 @@ async function generateModelMessage(context: TutorMessageContext) {
     }),
     input: prompt,
     store: false,
-    max_output_tokens: 220,
+    max_output_tokens: 360,
   });
 
   return response.output_text.trim();

@@ -116,9 +116,9 @@ export default async function ExamDayPage() {
           </div>
 
           <div className="mt-5 rounded-[1.5rem] border border-[rgba(28,124,104,0.22)] bg-[rgba(240,251,247,0.92)] p-5">
-            <p className="text-sm font-semibold text-[color:#145f50]">ACAM confidence message</p>
+            <p className="text-sm font-semibold text-[color:#145f50]">HCCI confidence message</p>
             <p className="mt-2 text-sm leading-7 text-[color:#1d2a26]">
-              ACAM believes you earned this moment. You have done the hard work, proved it with real readiness signals, and built a stronger plan around your weaker areas. Walk in steady, trust your preparation, and focus on one question and one skill at a time.
+              HCCI believes you earned this moment. You have done the hard work, proved it with real readiness signals, and built a stronger plan around your weaker areas. Walk in steady, trust your preparation, and focus on one question and one skill at a time.
             </p>
           </div>
 

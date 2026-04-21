@@ -3,46 +3,62 @@ import { redirect } from "next/navigation";
 
 import { signInAction } from "@/app/(auth)/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
+import {
+  getProductAdminPath,
+  getStudentAuthRedirectPathForProduct,
+  isProductTrack,
+  persistUserProductTrack,
+  PRODUCT_TRACK_OPTIONS,
+  resolveEffectiveProductTrack,
+} from "@/lib/auth/product-routing";
 import { getViewer, resolveProductFromProfile } from "@/lib/auth/session";
-import { getStudentAuthRedirectPathForUser as getCcmaStudentAuthRedirectPathForUser } from "@/lib/ccma/progression/stage";
-import { getStudentAuthRedirectPathForUser } from "@/lib/progression/stage";
+import { ensureRdaProfileForUser } from "@/lib/rda/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-
-const TRUST_BAR_STATS = {
-  studentsHelped: "500+",
-  avgReadinessGain: "38 points",
-  passRate: "91%",
-} as const;
 
 export default async function SignInPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
-  const viewer = await getViewer();
-
-  if (viewer) {
-    if (viewer.profile.role === "admin") {
-      redirect(resolveProductFromProfile(viewer.profile) === "ccma" ? "/ccma-admin" : "/admin");
-    }
-
-    redirect(
-      resolveProductFromProfile(viewer.profile) === "ccma"
-        ? await getCcmaStudentAuthRedirectPathForUser({
-            user: viewer.user,
-            userId: viewer.user.id,
-          })
-        : await getStudentAuthRedirectPathForUser({
-            user: viewer.user,
-            userId: viewer.user.id,
-          }),
-    );
-  }
-
   const params = await searchParams;
   const message =
     typeof params.message === "string" ? decodeURIComponent(params.message) : null;
+  const requestedProduct = isProductTrack(params.product) ? params.product : "";
+  const signUpHref = requestedProduct ? `/sign-up?product=${requestedProduct}` : "/sign-up";
+  const viewer = await getViewer();
+
+  if (viewer) {
+    const storedProduct = resolveProductFromProfile(viewer.profile);
+    const product = await resolveEffectiveProductTrack({
+      userId: viewer.user.id,
+      selectedProduct: requestedProduct || null,
+      profileProduct: storedProduct,
+    });
+    if (requestedProduct || product !== storedProduct || viewer.user.user_metadata?.product !== product) {
+      await persistUserProductTrack({ user: viewer.user, product });
+      if (product === "rda") {
+        await ensureRdaProfileForUser({
+          ...viewer.user,
+          user_metadata: {
+            ...viewer.user.user_metadata,
+            product,
+          },
+        });
+      }
+    }
+    if (viewer.profile.role === "admin") {
+      redirect(getProductAdminPath(product));
+    }
+
+    redirect(
+      await getStudentAuthRedirectPathForProduct({
+        product,
+        user: viewer.user,
+        userId: viewer.user.id,
+      }),
+    );
+  }
 
   return (
     <section className="panel-strong rounded-[2rem] p-8 sm:p-10">
@@ -54,12 +70,16 @@ export default async function SignInPage({
           <label className="mb-2 block text-sm font-medium" htmlFor="product">
             Exam track
           </label>
-          <select className="input-base" defaultValue="cna" id="product" name="product">
-            <option value="cna">CNA Tutor</option>
-            <option value="ccma">CCMA Tutor</option>
+          <select className="input-base" defaultValue={requestedProduct} id="product" name="product">
+            <option value="">Use my saved exam track</option>
+            {PRODUCT_TRACK_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <p className="text-muted mt-2 text-xs leading-6">
-            Choose the exam track tied to this account so we can send you to the right dashboard and pre-test flow.
+            Pick a track here only if you need to switch or repair the saved exam path for this account.
           </p>
         </div>
 
@@ -123,36 +143,14 @@ export default async function SignInPage({
       </div>
 
       <div className="mt-8 border-t border-[var(--border)] pt-8">
-        <p className="text-center text-sm font-medium">New to CNA Tutor or CCMA Tutor?</p>
+        <p className="text-center text-sm font-medium">New to HCCI Tutor?</p>
         <div className="mt-4 flex justify-center">
-          <Link className="button-secondary w-full sm:w-auto" href="/sign-up">
+          <Link className="button-secondary w-full sm:w-auto" href={signUpHref}>
             Create your account
           </Link>
         </div>
       </div>
 
-      <div className="mt-8 rounded-[1.25rem] border border-[var(--border)] bg-white/55 px-4 py-3">
-        <div className="flex flex-col gap-3 text-xs text-[color:var(--text-muted)] sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div>
-            <p className="uppercase tracking-[0.18em]">Students helped</p>
-            <p className="mt-1 font-semibold text-[color:var(--foreground)]">
-              {TRUST_BAR_STATS.studentsHelped}
-            </p>
-          </div>
-          <div>
-            <p className="uppercase tracking-[0.18em]">Average readiness gain</p>
-            <p className="mt-1 font-semibold text-[color:var(--foreground)]">
-              {TRUST_BAR_STATS.avgReadinessGain}
-            </p>
-          </div>
-          <div>
-            <p className="uppercase tracking-[0.18em]">Pass rate</p>
-            <p className="mt-1 font-semibold text-[color:var(--foreground)]">
-              {TRUST_BAR_STATS.passRate}
-            </p>
-          </div>
-        </div>
-      </div>
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
+import { resolveProductTrack } from "@/lib/auth/product-routing";
 import { resolvePreferredLanguage } from "@/lib/i18n/languages";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -10,18 +11,19 @@ import type { Database } from "@/types/database";
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 type ServerSupabaseClient = SupabaseClient<Database>;
+type ProfilePayload = ProfileInsert | Omit<ProfileInsert, "preferred_language">;
 
 export type Viewer = {
   user: User;
   profile: Profile;
 };
 
-export function resolveProductFromMetadata(value: unknown): "cna" | "ccma" {
-  return value === "ccma" ? "ccma" : "cna";
+export function resolveProductFromMetadata(value: unknown): "cna" | "ccma" | "rda" {
+  return resolveProductTrack(value);
 }
 
 export function resolveProductFromProfile(profile: Pick<Profile, "product"> | { product?: unknown }) {
-  return profile.product === "ccma" ? "ccma" : "cna";
+  return resolveProductTrack(profile.product);
 }
 
 function buildProfilePayload(
@@ -56,15 +58,32 @@ function buildProfilePayload(
 
 async function upsertProfile(
   client: ServerSupabaseClient,
-  payload: ProfileInsert,
+  payload: ProfilePayload,
 ): Promise<{ data: Profile | null; error: unknown }> {
   const result = await client
     .from("profiles")
-    .upsert(payload, { onConflict: "id" })
+    .upsert(payload as ProfileInsert, { onConflict: "id" })
     .select("*")
     .single();
 
   return result;
+}
+
+function isMissingPreferredLanguageColumn(error: unknown) {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "PGRST204" &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.includes("preferred_language")
+  );
+}
+
+function withoutPreferredLanguage(payload: ProfileInsert): ProfilePayload {
+  const { preferred_language: _preferredLanguage, ...fallbackPayload } = payload;
+  return fallbackPayload;
 }
 
 export async function ensureProfileForUser(
@@ -73,6 +92,7 @@ export async function ensureProfileForUser(
   overrides?: Partial<ProfileInsert>,
 ): Promise<Profile | null> {
   const payload = buildProfilePayload(user, overrides);
+  const fallbackPayload = withoutPreferredLanguage(payload);
 
   if (client) {
     const { data, error } = await upsertProfile(client, payload);
@@ -81,11 +101,24 @@ export async function ensureProfileForUser(
       return data;
     }
 
+    if (isMissingPreferredLanguageColumn(error)) {
+      const fallbackResult = await upsertProfile(client, fallbackPayload);
+      if (fallbackResult.data) {
+        return fallbackResult.data;
+      }
+    }
+
     console.error("Authenticated profile repair failed", { userId: user.id, error });
   }
 
   const admin = createAdminClient();
-  const { data, error } = await upsertProfile(admin, payload);
+  let { data, error } = await upsertProfile(admin, payload);
+
+  if (!data && isMissingPreferredLanguageColumn(error)) {
+    const fallbackResult = await upsertProfile(admin, fallbackPayload);
+    data = fallbackResult.data;
+    error = fallbackResult.error;
+  }
 
   if (error) {
     console.error("Failed to ensure profile for user", { userId: user.id, error });

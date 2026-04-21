@@ -17,9 +17,19 @@ export type LessonConceptMatch = {
   keywords: string[];
 };
 
+export type LessonQuestionType =
+  | "recall"
+  | "application"
+  | "scenario"
+  | "critical_thinking"
+  | "misconception"
+  | "summary";
+
 export type LessonSegment = {
   id: string;
   title: string;
+  questionType?: LessonQuestionType;
+  difficulty?: 1 | 2 | 3;
   concept: string;
   example: string;
   question: string;

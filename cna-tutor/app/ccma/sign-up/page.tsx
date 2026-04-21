@@ -137,11 +137,11 @@ export default async function CcmaSignUpPage({
       <div className="mt-4 text-center">
         <Link
           className="text-sm font-medium text-[color:var(--brand-strong)]"
-          href="https://cna-tutor.vercel.app/"
+          href="https://hcci-tutor.vercel.app/"
           rel="noopener noreferrer"
           target="_blank"
         >
-          ← Back to CNA Tutor
+          Back to HCCI Tutor
         </Link>
       </div>
     </section>

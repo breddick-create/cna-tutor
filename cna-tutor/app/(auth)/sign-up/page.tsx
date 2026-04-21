@@ -3,10 +3,17 @@ import { redirect } from "next/navigation";
 
 import { signUpAction } from "@/app/(auth)/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
+import {
+  getProductAdminPath,
+  getStudentAuthRedirectPathForProduct,
+  isProductTrack,
+  persistUserProductTrack,
+  PRODUCT_TRACK_OPTIONS,
+  resolveEffectiveProductTrack,
+} from "@/lib/auth/product-routing";
 import { getViewer, resolveProductFromProfile } from "@/lib/auth/session";
-import { getStudentAuthRedirectPathForUser as getCcmaStudentAuthRedirectPathForUser } from "@/lib/ccma/progression/stage";
 import { LANGUAGE_OPTIONS } from "@/lib/i18n/languages";
-import { getStudentAuthRedirectPathForUser } from "@/lib/progression/stage";
+import { ensureRdaProfileForUser } from "@/lib/rda/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -15,29 +22,47 @@ export default async function SignUpPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const viewer = await getViewer();
-
-  if (viewer) {
-    if (viewer.profile.role === "admin") {
-      redirect(resolveProductFromProfile(viewer.profile) === "ccma" ? "/ccma-admin" : "/admin");
-    }
-
-    redirect(
-      resolveProductFromProfile(viewer.profile) === "ccma"
-        ? await getCcmaStudentAuthRedirectPathForUser({
-            user: viewer.user,
-            userId: viewer.user.id,
-          })
-        : await getStudentAuthRedirectPathForUser({
-            user: viewer.user,
-            userId: viewer.user.id,
-          }),
-    );
-  }
-
   const params = await searchParams;
   const message =
     typeof params.message === "string" ? decodeURIComponent(params.message) : null;
+  const requestedProductFromParams = isProductTrack(params.product) ? params.product : null;
+  const requestedProduct = requestedProductFromParams ?? "cna";
+  const signInHref = requestedProductFromParams
+    ? `/sign-in?product=${requestedProductFromParams}`
+    : "/sign-in";
+  const viewer = await getViewer();
+
+  if (viewer) {
+    const storedProduct = resolveProductFromProfile(viewer.profile);
+    const product = await resolveEffectiveProductTrack({
+      userId: viewer.user.id,
+      selectedProduct: requestedProductFromParams,
+      profileProduct: storedProduct,
+    });
+    if (requestedProductFromParams || product !== storedProduct || viewer.user.user_metadata?.product !== product) {
+      await persistUserProductTrack({ user: viewer.user, product });
+      if (product === "rda") {
+        await ensureRdaProfileForUser({
+          ...viewer.user,
+          user_metadata: {
+            ...viewer.user.user_metadata,
+            product,
+          },
+        });
+      }
+    }
+    if (viewer.profile.role === "admin") {
+      redirect(getProductAdminPath(product));
+    }
+
+    redirect(
+      await getStudentAuthRedirectPathForProduct({
+        product,
+        user: viewer.user,
+        userId: viewer.user.id,
+      }),
+    );
+  }
 
   return (
     <section className="panel-strong rounded-[2rem] p-8 sm:p-10">
@@ -50,7 +75,7 @@ export default async function SignUpPage({
         <p className="text-sm font-semibold">What happens right after you sign up</p>
         <div className="mt-4 space-y-3">
           <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/85 px-4 py-3">
-            <p className="text-sm leading-6">1. You choose CNA or CCMA and start with the pre-test</p>
+            <p className="text-sm leading-6">1. You choose CNA, CCMA, or RDA and start with the pre-test</p>
           </div>
           <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/85 px-4 py-3">
             <p className="text-sm leading-6">2. Your results identify weak areas</p>
@@ -66,9 +91,12 @@ export default async function SignUpPage({
           <label className="mb-2 block text-sm font-medium" htmlFor="product">
             Exam track
           </label>
-          <select className="input-base" defaultValue="cna" id="product" name="product">
-            <option value="cna">CNA Tutor</option>
-            <option value="ccma">CCMA Tutor</option>
+          <select className="input-base" defaultValue={requestedProduct} id="product" name="product">
+            {PRODUCT_TRACK_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <p className="text-muted mt-2 text-xs leading-6">
             Your choice decides which pre-test, study plan, and dashboard you enter after sign-up.
@@ -127,7 +155,7 @@ export default async function SignUpPage({
           </label>
           <select
             className="input-base"
-                defaultValue="en"
+            defaultValue="en"
             id="preferred_language"
             name="preferred_language"
           >
@@ -142,7 +170,7 @@ export default async function SignUpPage({
           </p>
         </div>
 
-      <div>
+        <div>
           <label className="mb-2 block text-sm font-medium" htmlFor="password">
             Password
           </label>
@@ -180,7 +208,7 @@ export default async function SignUpPage({
           Sign in to return to your study plan and pick up where you left off.
         </p>
         <div className="mt-4">
-          <Link className="button-secondary" href="/sign-in">
+          <Link className="button-secondary" href={signInHref}>
             Sign in instead
           </Link>
         </div>

@@ -10,7 +10,7 @@ export function BrandLogo({ className, priority = false, width = 320 }: BrandLog
   return (
     <div className={className}>
       <Image
-        alt="ACAM logo"
+        alt="HCCI Tutor"
         className="h-auto w-full"
         height={95}
         priority={priority}

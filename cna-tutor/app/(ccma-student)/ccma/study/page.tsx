@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { GuidedStudyPath } from "@/components/student/guided-study-path";
+import { GuidedStudyPath } from "@/components/ccma/guided-study-path";
 import { StudentEmptyState } from "@/components/student/student-empty-state";
 import { ContinueStudyCta } from "@/components/ccma/continue-study-cta";
 import { requireCcmaViewer } from "@/lib/ccma/auth/session";

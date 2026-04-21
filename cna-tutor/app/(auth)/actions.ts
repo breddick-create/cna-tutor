@@ -7,19 +7,37 @@ import { isValidStaffAccessToken } from "@/lib/auth/staff-access";
 import {
   ensureProfileForUser,
   resolveProductFromMetadata,
-  resolveProductFromProfile,
 } from "@/lib/auth/session";
+import {
+  getProductAdminPath,
+  getStudentAuthRedirectPathForProduct,
+  isProductTrack,
+  resolveEffectiveProductTrack,
+  resolveProductTrack,
+  type ProductTrack,
+} from "@/lib/auth/product-routing";
 import { resolveAppUrl } from "@/lib/app-url";
 import { env } from "@/lib/env";
-import { getStudentAuthRedirectPathForUser as getCcmaStudentAuthRedirectPathForUser } from "@/lib/ccma/progression/stage";
 import { resolvePreferredLanguage } from "@/lib/i18n/languages";
-import { getStudentAuthRedirectPathForUser } from "@/lib/progression/stage";
+import { ensureRdaProfileForUser } from "@/lib/rda/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 function buildRedirect(path: string, message: string) {
   const encoded = encodeURIComponent(message);
   return `${path}?message=${encoded}`;
+}
+
+function isMissingPreferredLanguageColumn(error: unknown) {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "PGRST204" &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.includes("preferred_language")
+  );
 }
 
 function buildStaffSetupRedirect(message: string, inviteToken?: string) {
@@ -52,28 +70,11 @@ function getFriendlyStaffSetupMessage(message: string) {
   return "We couldn't create the staff account. Check the information and try again.";
 }
 
-async function getRedirectPathForStudent(args: {
-  product: "cna" | "ccma";
-  user: Parameters<typeof getStudentAuthRedirectPathForUser>[0]["user"];
-  userId: string;
-}) {
-  if (args.product === "ccma") {
-    return getCcmaStudentAuthRedirectPathForUser({
-      user: args.user,
-      userId: args.userId,
-    });
-  }
-
-  return getStudentAuthRedirectPathForUser({
-    user: args.user,
-    userId: args.userId,
-  });
-}
-
 export async function signInAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const selectedProduct = formData.get("product") === "ccma" ? "ccma" : "cna";
+  const productValue = formData.get("product");
+  const selectedProduct = isProductTrack(productValue) ? productValue : null;
 
   if (!email || !password) {
     redirect(buildRedirect("/sign-in", "Enter your email and password."));
@@ -91,17 +92,32 @@ export async function signInAction(formData: FormData) {
 
   if (user) {
     const admin = createAdminClient();
+    const { data: existingProfile } = await admin
+      .from("profiles")
+      .select("product")
+      .eq("id", user.id)
+      .maybeSingle();
+    const effectiveProduct = await resolveEffectiveProductTrack({
+      userId: user.id,
+      selectedProduct,
+      profileProduct: existingProfile?.product,
+    });
+
     await admin.auth.admin.updateUserById(user.id, {
       user_metadata: {
         ...user.user_metadata,
-        product: selectedProduct,
+        product: effectiveProduct,
       },
     });
 
-    const profile = await ensureProfileForUser(user, supabase, { product: selectedProduct });
+    const profile = await ensureProfileForUser(user, supabase, { product: effectiveProduct });
 
     if (!profile) {
       redirect(buildRedirect("/sign-in", "We couldn't load your profile. Please try again."));
+    }
+
+    if (effectiveProduct === "rda") {
+      await ensureRdaProfileForUser(user);
     }
 
     const now = new Date().toISOString();
@@ -109,18 +125,18 @@ export async function signInAction(formData: FormData) {
     await admin
       .from("profiles")
       .update({
-        product: selectedProduct,
+        product: effectiveProduct,
         last_login_at: now,
         last_activity_at: now,
       })
       .eq("id", user.id);
 
     if (profile.role === "admin") {
-      redirect(selectedProduct === "ccma" ? "/ccma-admin" : "/admin");
+      redirect(getProductAdminPath(effectiveProduct));
     }
 
-    const redirectPath = await getRedirectPathForStudent({
-      product: selectedProduct,
+    const redirectPath = await getStudentAuthRedirectPathForProduct({
+      product: effectiveProduct,
       user,
       userId: user.id,
     });
@@ -137,7 +153,8 @@ export async function signUpAction(formData: FormData) {
   const fullName = String(formData.get("full_name") ?? "").trim();
   const cohort = String(formData.get("cohort") ?? "").trim();
   const preferredLanguage = resolvePreferredLanguage(formData.get("preferred_language"));
-  const product = formData.get("product") === "ccma" ? "ccma" : "cna";
+  const productValue = formData.get("product");
+  const product = resolveProductTrack(productValue);
   const headerStore = await headers();
   const appUrl = resolveAppUrl(headerStore);
 
@@ -170,7 +187,8 @@ export async function signUpAction(formData: FormData) {
 
   if (signUpData.user) {
     await ensureProfileForUser(signUpData.user, supabase, { product });
-    await createAdminClient()
+    const admin = createAdminClient();
+    const { error: profileUpdateError } = await admin
       .from("profiles")
       .update({
         product,
@@ -178,11 +196,25 @@ export async function signUpAction(formData: FormData) {
         preferred_language: preferredLanguage,
       })
       .eq("id", signUpData.user.id);
+
+    if (isMissingPreferredLanguageColumn(profileUpdateError)) {
+      await admin
+        .from("profiles")
+        .update({
+          product,
+          cohort: cohort || null,
+        })
+        .eq("id", signUpData.user.id);
+    }
+
+    if (product === "rda") {
+      await ensureRdaProfileForUser(signUpData.user);
+    }
   }
 
   if (signUpData.session && signUpData.user) {
     redirect(
-      await getRedirectPathForStudent({
+      await getStudentAuthRedirectPathForProduct({
         product: resolveProductFromMetadata(signUpData.user.user_metadata?.product),
         user: signUpData.user,
         userId: signUpData.user.id,

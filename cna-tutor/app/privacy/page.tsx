@@ -25,14 +25,14 @@ export default function PrivacyPage() {
 
         <section className="panel rounded-[2rem] p-8">
           <p className="eyebrow">Privacy</p>
-          <h1 className="mt-4 text-4xl font-semibold">How CNA Tutor handles student data.</h1>
+          <h1 className="mt-4 text-4xl font-semibold">How HCCI Tutor handles student data.</h1>
           <div className="text-muted mt-6 space-y-5 leading-8">
             <p>
-              CNA Tutor stores account details, study activity, assessment results, and progress
+              HCCI Tutor stores account details, study activity, assessment results, and progress
               information so students can get the right support and authorized staff can track progress.
             </p>
             <p>
-              Students see only their own study progress. Admin views are for authorized ACAM
+              Students see only their own study progress. Admin views are for authorized HCCI
               program staff who need reporting, engagement visibility, and student follow-up.
             </p>
             <p>
@@ -46,7 +46,7 @@ export default function PrivacyPage() {
                   {env.supportEmail}
                 </a>
               ) : (
-                "your ACAM program administrator"
+                "your HCCI program administrator"
               )}{" "}
               for the current privacy and retention guidance.
             </p>

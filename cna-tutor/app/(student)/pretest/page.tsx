@@ -38,7 +38,7 @@ export default async function PretestIntroPage() {
         </h1>
         <p className="text-muted mt-4 max-w-3xl leading-7">
           This first step is here to help, not to judge. The pre-test is designed to identify your
-          strengths and weak areas so CNA Tutor can guide you with more structure and confidence.
+          strengths and weak areas so HCCI Tutor can guide you with more structure and confidence.
         </p>
         <p className="text-muted mt-3 max-w-3xl text-sm leading-7">
           You will see what to study first as soon as this is done. If you need to stop, you can

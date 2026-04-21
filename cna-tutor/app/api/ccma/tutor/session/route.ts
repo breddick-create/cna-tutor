@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getViewer } from "@/lib/auth/session";
+import { getCcmaViewer } from "@/lib/ccma/auth/session";
 import {
   getPretestDomainBreakdown,
   getPretestScore,
@@ -15,7 +15,6 @@ import {
 import { getStudentProgressionSnapshot } from "@/lib/ccma/progression/student";
 import { createClient } from "@/lib/supabase/server";
 import { buildInitialTutorTurnForMode } from "@/lib/ccma/tutor/orchestrator";
-import { recordStudyInteraction } from "@/lib/tracking/activity";
 import type { TutorMode } from "@/lib/ccma/tutor/types";
 import { resolvePreferredLanguage } from "@/lib/ccma/i18n/languages";
 
@@ -34,7 +33,7 @@ const createSessionSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const viewer = await getViewer();
+  const viewer = await getCcmaViewer();
 
   if (!viewer) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -55,34 +54,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const [progression, { data: masteryRows }, { data: studySessions }] = await Promise.all([
+  const supabase = (await createClient()) as any;
+
+  const [progression, { data: studySessions }] = await Promise.all([
     getStudentProgressionSnapshot({
       userId: viewer.user.id,
       pretestScore: getPretestScore(viewer.user),
       pretestDomainBreakdown: getPretestDomainBreakdown(viewer.user),
     }),
     supabase
-      .from("domain_mastery")
-      .select("domain_id, mastery_score, weak_streak")
-      .eq("user_id", viewer.user.id)
-      .order("mastery_score", { ascending: true })
-      .limit(3),
-    supabase
-      .from("tutor_sessions")
+      .from("ccma_tutor_sessions")
       .select("status, session_state_json")
       .eq("user_id", viewer.user.id),
   ]);
-
-  const domainIds = (masteryRows ?? []).map((row) => row.domain_id);
-  const { data: domains } = domainIds.length
-    ? await supabase.from("domains").select("id, title").in("id", domainIds)
-    : { data: [] };
-  const titleMap = new Map((domains ?? []).map((domain) => [domain.id, domain.title]));
-  const weakAreasSnapshot = (masteryRows ?? [])
-    .filter((row) => row.mastery_score < 75 || row.weak_streak > 0)
-    .map((row) => titleMap.get(row.domain_id))
-    .filter((title): title is string => Boolean(title));
 
   const studyPath = buildGuidedStudyPath({
     progression,
@@ -104,12 +88,12 @@ export async function POST(request: Request) {
   const initialTurn = await buildInitialTutorTurnForMode({
     lessonId: parsed.data.lessonId,
     mode: parsed.data.mode as TutorMode | undefined,
-    weakAreasSnapshot,
+    weakAreasSnapshot: [],
     preferredLanguage: resolvePreferredLanguage(viewer.profile.preferred_language),
   });
 
   const { data: session, error: sessionError } = await supabase
-    .from("tutor_sessions")
+    .from("ccma_tutor_sessions")
     .insert({
       user_id: viewer.user.id,
       mode: initialTurn.state.mode,
@@ -123,7 +107,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "We couldn't start that lesson." }, { status: 500 });
   }
 
-  const { error: turnError } = await supabase.from("tutor_turns").insert({
+  const { error: turnError } = await supabase.from("ccma_tutor_turns").insert({
     session_id: session.id,
     actor: "tutor",
     turn_type: "lesson_intro",
@@ -134,22 +118,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "We couldn't load the first tutor step." }, { status: 500 });
   }
 
-  await recordStudyInteraction({
-    supabase,
-    session,
-    eventType: "tutor_session_started",
-    metadata: {
-      lessonId: initialTurn.lesson.id,
-      lessonTitle: initialTurn.lesson.title,
-      mode: initialTurn.state.mode,
-    },
-  });
-
   return NextResponse.json({
     sessionId: session.id,
     lessonId: initialTurn.lesson.id,
   });
 }
-
-
-

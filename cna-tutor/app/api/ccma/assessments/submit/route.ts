@@ -28,7 +28,7 @@ const submitAssessmentSchema = z.object({
   questionIds: z.array(z.string().trim().min(1)).min(1).optional(),
   answers: z.record(z.string(), z.string()),
   timeSpentSeconds: z.number().int().min(0).max(60 * 60 * 2),
-  confidenceLevel: z.enum(["not_confident", "somewhat_confident", "very_confident"]).optional(),
+  confidenceLevel: z.enum(["not_confident", "somewhat_confident", "very_confident"]).nullish(),
 });
 
 export async function POST(request: Request) {
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     score: result.percent,
     totalQuestions: result.totalQuestions,
     passed: result.passed,
-    confidenceLevel: parsed.data.confidenceLevel,
+    confidenceLevel: parsed.data.confidenceLevel ?? undefined,
     confidenceScore: parsed.data.confidenceLevel
       ? confidenceScoreMap[parsed.data.confidenceLevel]
       : undefined,

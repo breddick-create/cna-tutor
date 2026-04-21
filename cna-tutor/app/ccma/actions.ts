@@ -43,6 +43,28 @@ export async function ccmaSignInAction(formData: FormData) {
     );
   }
 
+  const now = new Date().toISOString();
+  const admin = createAdminClient();
+
+  // Fetch the existing profile (created by the DB trigger on signup).
+  // Then stamp it as CCMA. This avoids a full upsert that can fail when
+  // the session cookie isn't yet propagated to a second client instance.
+  const { data: existingProfile } = await admin
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  if (existingProfile) {
+    await admin
+      .from("profiles")
+      .update({ product: "ccma", last_login_at: now, last_activity_at: now })
+      .eq("id", user.id);
+
+    redirect(existingProfile.role === "admin" ? "/ccma-admin" : "/ccma/dashboard");
+  }
+
+  // Profile missing — create it now.
   const profile = await ensureCcmaProfileForUser(user);
 
   if (!profile) {
@@ -53,16 +75,6 @@ export async function ccmaSignInAction(formData: FormData) {
       ),
     );
   }
-
-  const now = new Date().toISOString();
-  await createAdminClient()
-    .from("profiles")
-    .update({
-      product: "ccma",
-      last_login_at: now,
-      last_activity_at: now,
-    })
-    .eq("id", user.id);
 
   redirect(profile.role === "admin" ? "/ccma-admin" : "/ccma/dashboard");
 }

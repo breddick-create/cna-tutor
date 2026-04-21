@@ -235,7 +235,7 @@ export type Database = {
         Row: {
           id: string;
           role: "student" | "admin";
-          product: "cna" | "ccma";
+          product: "cna" | "ccma" | "rda";
           full_name: string;
           email: string;
           cohort: string | null;
@@ -249,7 +249,7 @@ export type Database = {
         Insert: {
           id: string;
           role?: "student" | "admin";
-          product?: "cna" | "ccma";
+          product?: "cna" | "ccma" | "rda";
           full_name: string;
           email: string;
           cohort?: string | null;
@@ -263,7 +263,7 @@ export type Database = {
         Update: {
           id?: string;
           role?: "student" | "admin";
-          product?: "cna" | "ccma";
+          product?: "cna" | "ccma" | "rda";
           full_name?: string;
           email?: string;
           cohort?: string | null;
@@ -273,6 +273,399 @@ export type Database = {
           last_activity_at?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_profiles: {
+        Row: {
+          id: string;
+          user_id: string;
+          product: string;
+          full_name: string | null;
+          language_preference: string | null;
+          school_or_program: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          product?: string;
+          full_name?: string | null;
+          language_preference?: string | null;
+          school_or_program?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          product?: string;
+          full_name?: string | null;
+          language_preference?: string | null;
+          school_or_program?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_pretest_results: {
+        Row: {
+          id: string;
+          user_id: string;
+          overall_score: number;
+          domain_scores: Json;
+          weak_areas: Json | null;
+          strengths: Json | null;
+          readiness_score: number | null;
+          readiness_label: string | null;
+          confidence_estimate: number | null;
+          answers: Json | null;
+          completed_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          overall_score: number;
+          domain_scores: Json;
+          weak_areas?: Json | null;
+          strengths?: Json | null;
+          readiness_score?: number | null;
+          readiness_label?: string | null;
+          confidence_estimate?: number | null;
+          answers?: Json | null;
+          completed_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          overall_score?: number;
+          domain_scores?: Json;
+          weak_areas?: Json | null;
+          strengths?: Json | null;
+          readiness_score?: number | null;
+          readiness_label?: string | null;
+          confidence_estimate?: number | null;
+          answers?: Json | null;
+          completed_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_lesson_progress: {
+        Row: {
+          id: string;
+          user_id: string;
+          lesson_id: string;
+          domain_id: string;
+          status: string;
+          mastery_score: number | null;
+          current_step: number | null;
+          attempts_count: number | null;
+          last_feedback: string | null;
+          completed_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          lesson_id: string;
+          domain_id: string;
+          status?: string;
+          mastery_score?: number | null;
+          current_step?: number | null;
+          attempts_count?: number | null;
+          last_feedback?: string | null;
+          completed_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          lesson_id?: string;
+          domain_id?: string;
+          status?: string;
+          mastery_score?: number | null;
+          current_step?: number | null;
+          attempts_count?: number | null;
+          last_feedback?: string | null;
+          completed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_quiz_attempts: {
+        Row: {
+          id: string;
+          user_id: string;
+          quiz_id: string;
+          domain_id: string;
+          score: number;
+          passed: boolean;
+          answers: Json | null;
+          weak_areas: Json | null;
+          completed_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          quiz_id: string;
+          domain_id: string;
+          score: number;
+          passed?: boolean;
+          answers?: Json | null;
+          weak_areas?: Json | null;
+          completed_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          quiz_id?: string;
+          domain_id?: string;
+          score?: number;
+          passed?: boolean;
+          answers?: Json | null;
+          weak_areas?: Json | null;
+          completed_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_mock_exam_attempts: {
+        Row: {
+          id: string;
+          user_id: string;
+          exam_version: string | null;
+          score: number;
+          timed: boolean;
+          duration_seconds: number | null;
+          domain_scores: Json;
+          weak_areas: Json | null;
+          action_plan: Json | null;
+          answers: Json | null;
+          completed_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          exam_version?: string | null;
+          score: number;
+          timed?: boolean;
+          duration_seconds?: number | null;
+          domain_scores: Json;
+          weak_areas?: Json | null;
+          action_plan?: Json | null;
+          answers?: Json | null;
+          completed_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          exam_version?: string | null;
+          score?: number;
+          timed?: boolean;
+          duration_seconds?: number | null;
+          domain_scores?: Json;
+          weak_areas?: Json | null;
+          action_plan?: Json | null;
+          answers?: Json | null;
+          completed_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_readiness_snapshots: {
+        Row: {
+          id: string;
+          user_id: string;
+          score: number;
+          label: string;
+          weak_areas: Json | null;
+          strengths: Json | null;
+          next_best_action: string | null;
+          checklist: Json | null;
+          recovery_signals: Json | null;
+          confidence_trend: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          score: number;
+          label: string;
+          weak_areas?: Json | null;
+          strengths?: Json | null;
+          next_best_action?: string | null;
+          checklist?: Json | null;
+          recovery_signals?: Json | null;
+          confidence_trend?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          score?: number;
+          label?: string;
+          weak_areas?: Json | null;
+          strengths?: Json | null;
+          next_best_action?: string | null;
+          checklist?: Json | null;
+          recovery_signals?: Json | null;
+          confidence_trend?: number | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_study_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          lesson_id: string | null;
+          domain_id: string | null;
+          session_type: "lesson" | "quiz" | "mock_exam" | "pretest" | "review" | "tutor";
+          duration_seconds: number;
+          completed: boolean;
+          score: number | null;
+          metadata: Json;
+          started_at: string;
+          ended_at: string | null;
+          active_seconds: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          lesson_id?: string | null;
+          domain_id?: string | null;
+          session_type: "lesson" | "quiz" | "mock_exam" | "pretest" | "review" | "tutor";
+          duration_seconds?: number;
+          completed?: boolean;
+          score?: number | null;
+          metadata?: Json;
+          started_at?: string;
+          ended_at?: string | null;
+          active_seconds?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          lesson_id?: string | null;
+          domain_id?: string | null;
+          session_type?: "lesson" | "quiz" | "mock_exam" | "pretest" | "review" | "tutor";
+          duration_seconds?: number;
+          completed?: boolean;
+          score?: number | null;
+          metadata?: Json;
+          started_at?: string;
+          ended_at?: string | null;
+          active_seconds?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_tutor_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          lesson_id: string;
+          mode: string;
+          status: string;
+          session_state_json: Json;
+          started_at: string;
+          ended_at: string | null;
+          last_activity_at: string;
+          total_seconds: number;
+          active_seconds: number;
+          idle_seconds: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          lesson_id: string;
+          mode: string;
+          status?: string;
+          session_state_json?: Json;
+          started_at?: string;
+          ended_at?: string | null;
+          last_activity_at?: string;
+          total_seconds?: number;
+          active_seconds?: number;
+          idle_seconds?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          lesson_id?: string;
+          mode?: string;
+          status?: string;
+          session_state_json?: Json;
+          started_at?: string;
+          ended_at?: string | null;
+          last_activity_at?: string;
+          total_seconds?: number;
+          active_seconds?: number;
+          idle_seconds?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_tutor_turns: {
+        Row: {
+          id: string;
+          session_id: string;
+          actor: string;
+          turn_type: string;
+          content: string;
+          correctness: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          actor: string;
+          turn_type: string;
+          content: string;
+          correctness?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          session_id?: string;
+          actor?: string;
+          turn_type?: string;
+          content?: string;
+          correctness?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      rda_admin_notes: {
+        Row: {
+          id: string;
+          user_id: string;
+          admin_user_id: string;
+          note: string;
+          note_type: "general" | "check_in" | "risk" | "encouragement" | "academic";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          admin_user_id: string;
+          note: string;
+          note_type?: "general" | "check_in" | "risk" | "encouragement" | "academic";
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          admin_user_id?: string;
+          note?: string;
+          note_type?: "general" | "check_in" | "risk" | "encouragement" | "academic";
+          created_at?: string;
         };
         Relationships: [];
       };

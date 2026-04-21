@@ -52,6 +52,21 @@ export async function updateSession(request: NextRequest) {
   }
 
   const role = user.user_metadata?.role === "admin" ? "admin" : "student";
+  const product =
+    user.user_metadata?.product === "rda"
+      ? "rda"
+      : user.user_metadata?.product === "ccma"
+        ? "ccma"
+        : "cna";
+
+  if (role === "student" && product === "rda") {
+    return NextResponse.redirect(new URL("/rda/dashboard", request.url));
+  }
+
+  if (role === "student" && product === "ccma") {
+    return NextResponse.redirect(new URL("/ccma/dashboard", request.url));
+  }
+
   const pretestComplete = typeof user.user_metadata?.pretest_completed_at === "string";
   const onPretestIntroPath = isPretestIntroPath(request.nextUrl.pathname);
   const onPretestStartPath = isPretestStartPath(request.nextUrl.pathname);

@@ -3,7 +3,12 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { LanguageProvider } from "@/components/student/language-context";
-import { requireViewer } from "@/lib/auth/session";
+import {
+  getProductAdminPath,
+  getStudentAuthRedirectPathForProduct,
+  resolveEffectiveProductTrack,
+} from "@/lib/auth/product-routing";
+import { requireViewer, resolveProductFromMetadata, resolveProductFromProfile } from "@/lib/auth/session";
 import {
   pickLocalizedText,
   resolvePreferredLanguage,
@@ -71,9 +76,26 @@ export default async function StudentLayout({
   children: React.ReactNode;
 }) {
   const viewer = await requireViewer();
+  const metadataProduct = resolveProductFromMetadata(viewer.user.user_metadata?.product);
+  const product = await resolveEffectiveProductTrack({
+    userId: viewer.user.id,
+    // Trust metadata when it says a non-CNA track — catches RDA users with stale profile.product
+    selectedProduct: metadataProduct !== "cna" ? metadataProduct : null,
+    profileProduct: resolveProductFromProfile(viewer.profile),
+  });
 
   if (viewer.profile.role === "admin") {
-    redirect("/admin");
+    redirect(getProductAdminPath(product));
+  }
+
+  if (product !== "cna") {
+    redirect(
+      await getStudentAuthRedirectPathForProduct({
+        product,
+        user: viewer.user,
+        userId: viewer.user.id,
+      }),
+    );
   }
 
   const headerStore = await headers();

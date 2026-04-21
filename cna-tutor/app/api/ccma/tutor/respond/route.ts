@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getViewer } from "@/lib/auth/session";
+import { getCcmaViewer } from "@/lib/ccma/auth/session";
 import { hasCompletedPretest, PRETEST_REQUIRED_MESSAGE } from "@/lib/ccma/onboarding/pretest";
 import { createClient } from "@/lib/supabase/server";
 import { getTutorLesson } from "@/lib/ccma/tutor/lessons";
 import { parseTutorSessionState, processTutorReply } from "@/lib/ccma/tutor/orchestrator";
 import { updateDomainMastery } from "@/lib/ccma/tutor/progress";
-import { recordStudyInteraction } from "@/lib/tracking/activity";
 
 const respondSchema = z.object({
   sessionId: z.string().uuid(),
@@ -15,7 +14,7 @@ const respondSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const viewer = await getViewer();
+  const viewer = await getCcmaViewer();
 
   if (!viewer) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,9 +35,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
+
   const { data: session, error: sessionError } = await supabase
-    .from("tutor_sessions")
+    .from("ccma_tutor_sessions")
     .select("*")
     .eq("id", parsed.data.sessionId)
     .eq("user_id", viewer.user.id)
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Lesson not found." }, { status: 404 });
   }
 
-  const { error: studentTurnError } = await supabase.from("tutor_turns").insert({
+  const { error: studentTurnError } = await supabase.from("ccma_tutor_turns").insert({
     session_id: session.id,
     actor: "student",
     turn_type: "student_response",
@@ -85,15 +85,17 @@ export async function POST(request: Request) {
     studentMessage: parsed.data.message,
   });
 
-  const endedAt = result.nextState.sessionComplete ? new Date().toISOString() : null;
+  const now = new Date().toISOString();
+  const endedAt = result.nextState.sessionComplete ? now : null;
   const nextStatus = result.nextState.sessionComplete ? "completed" : "active";
 
   const { error: updateSessionError } = await supabase
-    .from("tutor_sessions")
+    .from("ccma_tutor_sessions")
     .update({
       session_state_json: result.nextState,
       status: nextStatus,
       ended_at: endedAt,
+      last_activity_at: now,
     })
     .eq("id", session.id);
 
@@ -102,7 +104,7 @@ export async function POST(request: Request) {
   }
 
   const { data: tutorTurn, error: tutorTurnError } = await supabase
-    .from("tutor_turns")
+    .from("ccma_tutor_turns")
     .insert({
       session_id: session.id,
       actor: "tutor",
@@ -117,25 +119,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "We couldn't save the tutor response." }, { status: 500 });
   }
 
-  const tracking = await recordStudyInteraction({
-    supabase,
-    session,
-    eventType: result.nextState.sessionComplete ? "lesson_completed" : "tutor_response_recorded",
-    metadata: {
-      lessonId: lesson.id,
-      lessonTitle: lesson.title,
-      correct: result.evaluation.correct,
-      masteryScore: result.nextState.masteryScore,
-    },
-    markLessonCompleted: result.nextState.sessionComplete,
-  });
-
   await Promise.allSettled([
     updateDomainMastery({
       userId: viewer.user.id,
       lesson,
       evaluation: result.evaluation,
     }),
+    supabase
+      .from("profiles")
+      .update({ last_activity_at: now })
+      .eq("id", viewer.user.id),
   ]);
 
   return NextResponse.json({
@@ -160,9 +153,7 @@ export async function POST(request: Request) {
         id: lesson.id,
         title: lesson.title,
       },
-      tracking,
+      tracking: { now, totalSeconds: 0, activeSeconds: 0, idleSeconds: 0 },
     },
   });
 }
-
-

@@ -2,9 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
+import {
+  getProductAdminPath,
+  getStudentAuthRedirectPathForProduct,
+  resolveEffectiveProductTrack,
+} from "@/lib/auth/product-routing";
 import { getViewer, resolveProductFromProfile } from "@/lib/auth/session";
-import { getStudentNextRequiredPathForUser as getCcmaStudentNextRequiredPathForUser } from "@/lib/ccma/progression/stage";
-import { getStudentNextRequiredPathForUser } from "@/lib/progression/stage";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -24,7 +27,7 @@ type ProgramBenefit = {
 };
 
 const heroValueProps = [
-  "Choose CNA or CCMA before you start so the study path matches your exam.",
+  "Choose CNA, CCMA, or RDA before you start so the study path matches your exam.",
   "Begin with a pre-test that shows what needs help first.",
   "Follow a structured plan with one clear next step at every stage.",
 ];
@@ -116,7 +119,7 @@ function MockScreenshot() {
           <span className="h-3 w-3 rounded-full bg-[rgba(232,179,44,0.65)]" />
           <span className="h-3 w-3 rounded-full bg-[rgba(28,124,104,0.55)]" />
           <div className="ml-3 rounded-full border border-[rgba(29,42,38,0.08)] bg-white/90 px-4 py-1 text-[11px] text-[color:var(--text-muted)] shadow-sm">
-            cna-tutor.app
+            hcci-tutor.app
           </div>
         </div>
 
@@ -222,22 +225,22 @@ export default async function HomePage({
   }
 
   if (viewer) {
+    const product = await resolveEffectiveProductTrack({
+      userId: viewer.user.id,
+      profileProduct: resolveProductFromProfile(viewer.profile),
+    });
+
     if (viewer.profile.role === "admin") {
-      redirect(resolveProductFromProfile(viewer.profile) === "ccma" ? "/ccma-admin" : "/admin");
+      redirect(getProductAdminPath(product));
     }
 
-    const nextRequiredPath =
-      resolveProductFromProfile(viewer.profile) === "ccma"
-        ? await getCcmaStudentNextRequiredPathForUser({
-            user: viewer.user,
-            userId: viewer.user.id,
-          })
-        : await getStudentNextRequiredPathForUser({
-            user: viewer.user,
-            userId: viewer.user.id,
-          });
-
-    redirect(nextRequiredPath);
+    redirect(
+      await getStudentAuthRedirectPathForProduct({
+        product,
+        user: viewer.user,
+        userId: viewer.user.id,
+      }),
+    );
   }
 
   return (
@@ -249,7 +252,7 @@ export default async function HomePage({
               <div className="inline-flex rounded-[1.25rem] bg-white px-4 py-3 shadow-[0_12px_28px_rgba(32,48,61,0.08)]">
                 <BrandLogo className="w-[160px]" priority width={160} />
               </div>
-              <p className="eyebrow mt-4">CNA And CCMA Exam Prep</p>
+              <p className="eyebrow mt-4">CNA, CCMA, And RDA Exam Prep</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -271,7 +274,7 @@ export default async function HomePage({
             <div>
               <p className="eyebrow">Readiness-First Exam Prep</p>
               <h1 className="mt-4 max-w-4xl text-4xl font-semibold leading-tight sm:text-5xl">
-                Pass the CNA or CCMA exam with a clear plan built around your weak areas.
+                Pass the CNA, CCMA, or Texas RDA exam with a clear plan built around your weak areas.
               </h1>
               <p className="text-muted mt-5 max-w-3xl text-lg leading-8">
                 Start by choosing your exam track, take the matching pre-test, get a focused study plan, and keep moving until you&apos;re exam-ready.
@@ -326,7 +329,7 @@ export default async function HomePage({
                 See what students see after sign-up.
               </h2>
               <p className="text-muted mt-4 max-w-2xl leading-7">
-                The dashboard puts readiness, weak areas, and the next step in one place for either exam track.
+                The dashboard puts readiness, weak areas, and the next step in one place for each exam track.
               </p>
             </div>
 
@@ -391,7 +394,7 @@ export default async function HomePage({
             <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/78 p-5 text-left">
               <p className="text-sm font-semibold">I&apos;m a student</p>
               <p className="text-muted mt-2 text-sm leading-6">
-                Choose CNA or CCMA, create your account, and start the matching pre-test.
+                Choose CNA, CCMA, or RDA, create your account, and start the matching pre-test.
               </p>
               <div className="mt-4">
                 <Link className="button-primary w-full md:w-auto" href="/sign-up">
@@ -403,7 +406,7 @@ export default async function HomePage({
             <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/78 p-5 text-left">
               <p className="text-sm font-semibold">I&apos;m a program coordinator</p>
               <p className="text-muted mt-2 text-sm leading-6">
-                Get in touch about using CNA Tutor or CCMA Tutor with your program.
+                Get in touch about using HCCI Tutor across CNA, CCMA, and RDA programs.
               </p>
               <div className="mt-4">
                 <Link className="button-secondary w-full md:w-auto" href="/support">

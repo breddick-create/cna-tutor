@@ -3,6 +3,12 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { LanguageProvider } from "@/components/ccma/language-context";
+import {
+  getProductAdminPath,
+  getStudentAuthRedirectPathForProduct,
+  resolveEffectiveProductTrack,
+} from "@/lib/auth/product-routing";
+import { requireViewer, resolveProductFromProfile } from "@/lib/auth/session";
 import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import {
   pickLocalizedText,
@@ -70,6 +76,26 @@ export default async function StudentLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const productViewer = await requireViewer();
+  const product = await resolveEffectiveProductTrack({
+    userId: productViewer.user.id,
+    profileProduct: resolveProductFromProfile(productViewer.profile),
+  });
+
+  if (productViewer.profile.role === "admin") {
+    redirect(getProductAdminPath(product));
+  }
+
+  if (product !== "ccma") {
+    redirect(
+      await getStudentAuthRedirectPathForProduct({
+        product,
+        user: productViewer.user,
+        userId: productViewer.user.id,
+      }),
+    );
+  }
+
   const viewer = await requireCcmaViewer();
 
   if (viewer.profile.role === "admin") {

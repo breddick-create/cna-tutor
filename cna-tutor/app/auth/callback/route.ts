@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { getStudentAuthRedirectPathForUser as getCcmaStudentAuthRedirectPathForUser } from "@/lib/ccma/progression/stage";
+import {
+  getProductAdminPath,
+  getStudentAuthRedirectPathForProduct,
+  persistUserProductTrack,
+  resolveEffectiveProductTrack,
+} from "@/lib/auth/product-routing";
 import { resolveProductFromMetadata } from "@/lib/auth/session";
-import { getStudentAuthRedirectPathForUser } from "@/lib/progression/stage";
+import { ensureRdaProfileForUser } from "@/lib/rda/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 function buildSignInRedirect(requestUrl: URL, message: string) {
@@ -13,24 +18,6 @@ function buildSignInRedirect(requestUrl: URL, message: string) {
 
 function shouldHonorRequestedNext(next: string | null) {
   return next === "/reset-password";
-}
-
-async function getStudentRedirect(args: {
-  product: "cna" | "ccma";
-  user: Parameters<typeof getStudentAuthRedirectPathForUser>[0]["user"];
-  userId: string;
-}) {
-  if (args.product === "ccma") {
-    return getCcmaStudentAuthRedirectPathForUser({
-      user: args.user,
-      userId: args.userId,
-    });
-  }
-
-  return getStudentAuthRedirectPathForUser({
-    user: args.user,
-    userId: args.userId,
-  });
 }
 
 export async function GET(request: Request) {
@@ -71,17 +58,27 @@ export async function GET(request: Request) {
         .select("product")
         .eq("id", user.id)
         .maybeSingle();
-      const product =
-        existingProfile?.product === "ccma"
-          ? "ccma"
-          : resolveProductFromMetadata(user.user_metadata?.product);
+      const product = await resolveEffectiveProductTrack({
+        userId: user.id,
+        profileProduct: existingProfile?.product ?? resolveProductFromMetadata(user.user_metadata?.product),
+      });
+      if (existingProfile?.product !== product || user.user_metadata?.product !== product) {
+        await persistUserProductTrack({ user, product });
+        if (product === "rda") {
+          await ensureRdaProfileForUser({
+            ...user,
+            user_metadata: {
+              ...user.user_metadata,
+              product,
+            },
+          });
+        }
+      }
       next = shouldHonorRequestedNext(requestedNext)
         ? requestedNext ?? "/reset-password"
         : user.user_metadata?.role === "admin"
-          ? product === "ccma"
-            ? "/ccma-admin"
-            : "/admin"
-          : await getStudentRedirect({
+          ? getProductAdminPath(product)
+          : await getStudentAuthRedirectPathForProduct({
               product,
               user,
               userId: user.id,

@@ -16,6 +16,128 @@ function normalizeText(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
 }
 
+function getWords(value: string) {
+  return normalizeText(value)
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
+const unsafeContradictionPhrases = [
+  "do nothing",
+  "ignore",
+  "wait until later",
+  "skip hand hygiene",
+  "dont report",
+  "do not report",
+  "never report",
+  "share private",
+  "tell the family",
+  "reuse needle",
+  "skip documentation",
+  "give medication without checking",
+  "diagnose",
+  "prescribe",
+];
+
+function includesNormalizedPhrase(value: string, phrase: string) {
+  return normalizeText(value).includes(normalizeText(phrase));
+}
+
+function keywordMatches(normalizedStudentMessage: string, keyword: string) {
+  const normalizedKeyword = normalizeText(keyword).trim();
+
+  if (!normalizedKeyword) {
+    return false;
+  }
+
+  const studentWords = new Set(getWords(normalizedStudentMessage));
+  const keywordWords = getWords(normalizedKeyword);
+
+  if (keywordWords.length <= 1) {
+    return studentWords.has(normalizedKeyword);
+  }
+
+  return normalizedStudentMessage
+    .split(/\s+/)
+    .join(" ")
+    .includes(keywordWords.join(" "));
+}
+
+function conceptMatchesStudentAnswer(
+  normalizedStudentMessage: string,
+  concept: LessonSegment["acceptableConcepts"][number],
+) {
+  const normalizedKeywords = concept.keywords
+    .map((keyword) => normalizeText(keyword).trim())
+    .filter(Boolean);
+  const phraseMatched = normalizedKeywords.some(
+    (keyword) => keyword.includes(" ") && keywordMatches(normalizedStudentMessage, keyword),
+  );
+
+  if (phraseMatched) {
+    return true;
+  }
+
+  const tokenHits = normalizedKeywords.filter(
+    (keyword) => !keyword.includes(" ") && keywordMatches(normalizedStudentMessage, keyword),
+  ).length;
+  const requiredTokenHits = normalizedKeywords.length <= 1 ? 1 : 2;
+
+  return tokenHits >= requiredTokenHits;
+}
+
+function hasUnsafeContradiction(segment: LessonSegment, studentMessage: string) {
+  const combinedSegmentText = normalizeText(
+    [
+      segment.concept,
+      segment.example,
+      segment.question,
+      segment.idealAnswer,
+      segment.correctExplanation,
+      segment.incorrectExplanation,
+    ].join(" "),
+  );
+  const safetyOrScopeQuestion =
+    /\b(report|notify|provider|physician|nurse|emergency|infection|hand hygiene|glove|ppe|standard precaution|hipaa|privacy|medication|six rights|specimen|ecg|ekg|clia|scope)\b/.test(
+      combinedSegmentText,
+    );
+
+  if (!safetyOrScopeQuestion) {
+    return false;
+  }
+
+  return unsafeContradictionPhrases.some((phrase) =>
+    includesNormalizedPhrase(studentMessage, phrase),
+  );
+}
+
+function isTooVagueForMastery(
+  segment: LessonSegment,
+  studentMessage: string,
+  matchedConcepts: string[],
+) {
+  const words = getWords(studentMessage);
+
+  if (matchedConcepts.length < segment.passThreshold) {
+    return false;
+  }
+
+  if (segment.passThreshold > 1 && words.length <= 2) {
+    return true;
+  }
+
+  if (segment.questionType === "scenario" && words.length < 5) {
+    return true;
+  }
+
+  if (segment.questionType === "critical_thinking" && words.length < 6) {
+    return true;
+  }
+
+  return false;
+}
+
 function getCurrentSegment(lesson: TutorLesson, state: TutorSessionState) {
   return lesson.segments[Math.min(state.currentSegmentIndex, lesson.segments.length - 1)];
 }
@@ -54,18 +176,18 @@ function determineDifficultyTier(args: {
 
 function getModeIntro(mode: TutorMode) {
   if (mode === "quiz") {
-    return "We are in guided check mode, so I will keep teaching brief and check your answer more directly.";
+    return "We're doing a quick guided check today — I'll keep the teaching brief and get right to the question.";
   }
 
   if (mode === "rapid_review") {
-    return "We are in rapid review mode, so I will move quickly and focus on high-yield reminders.";
+    return "We're moving fast today — short reminders, high-yield points, and quick questions to keep your recall sharp.";
   }
 
   if (mode === "weak_area_review") {
-    return "We are in weak-area review mode, so I will revisit key points until the reasoning feels solid.";
+    return "We're going to slow down and really nail this one — I'll keep coming back to it until it clicks.";
   }
 
-  return "We are in learn mode, so I will teach step by step and check your understanding as we go.";
+  return "We'll work through this together step by step — I'll teach one idea, check that it landed, then we'll move on.";
 }
 
 export function createInitialTutorSessionState(
@@ -160,16 +282,17 @@ export function evaluateStudentAnswer(
   const normalized = normalizeText(studentMessage);
 
   const matchedConcepts = segment.acceptableConcepts
-    .filter((concept) =>
-      concept.keywords.some((keyword) => normalized.includes(normalizeText(keyword))),
-    )
+    .filter((concept) => conceptMatchesStudentAnswer(normalized, concept))
     .map((concept) => concept.label);
 
   const missedConcepts = segment.acceptableConcepts
     .map((concept) => concept.label)
     .filter((label) => !matchedConcepts.includes(label));
 
-  const correct = matchedConcepts.length >= segment.passThreshold;
+  const hasRequiredConcepts = matchedConcepts.length >= segment.passThreshold;
+  const unsafeContradiction = hasUnsafeContradiction(segment, studentMessage);
+  const tooVagueForMastery = isTooVagueForMastery(segment, studentMessage, matchedConcepts);
+  const correct = hasRequiredConcepts && !unsafeContradiction && !tooVagueForMastery;
   const score = Math.min(
     100,
     Math.round((matchedConcepts.length / segment.acceptableConcepts.length) * 100),
@@ -178,7 +301,11 @@ export function evaluateStudentAnswer(
   return {
     correct,
     matchedConcepts,
-    missedConcepts,
+    missedConcepts: [
+      ...missedConcepts,
+      unsafeContradiction ? "safe CMA action" : null,
+      tooVagueForMastery ? "complete direct answer" : null,
+    ].filter((concept): concept is string => Boolean(concept)),
     score,
     idealAnswer: segment.idealAnswer,
     correctExplanation: segment.correctExplanation,
@@ -249,18 +376,18 @@ function renderFallbackMessage(context: TutorMessageContext) {
   if (context.action === "intro") {
     if (context.state.mode === "quiz") {
       return [
-        `Today we're doing a guided check on ${context.lesson.title}.`,
+        `Alright, let's check your knowledge on ${context.lesson.title}.`,
         modePrefix,
-        `Quick reminder: ${context.segment.concept}`,
+        `Here's a quick reminder before we dive in: ${context.segment.concept}`,
         context.segment.question,
       ].join("\n\n");
     }
 
     return [
-      `Today we're working on ${context.lesson.title}.`,
+      `Okay, today we're tackling ${context.lesson.title}.`,
       modePrefix,
       context.segment.concept,
-      `Example: ${context.segment.example}`,
+      `Here's a real-world example: ${context.segment.example}`,
       context.segment.question,
     ].join("\n\n");
   }
@@ -269,11 +396,11 @@ function renderFallbackMessage(context: TutorMessageContext) {
     const nextSegment = context.segment;
 
     return [
-      context.evaluation?.correctExplanation ?? "That's right.",
+      context.evaluation?.correctExplanation ?? "Yep, that's it!",
       context.state.mode === "quiz"
-        ? `Let's move to the next guided question in ${nextSegment.title}.`
-        : `Let's move to the next idea: ${nextSegment.title}.`,
-      context.state.mode === "quiz" ? `Focus point: ${nextSegment.concept}` : nextSegment.concept,
+        ? `Good — let's keep going. Next up: ${nextSegment.title}.`
+        : `Nice. Let's build on that — next idea: ${nextSegment.title}.`,
+      context.state.mode === "quiz" ? `Keep this in mind: ${nextSegment.concept}` : nextSegment.concept,
       context.state.mode === "rapid_review" ? null : `Example: ${nextSegment.example}`,
       nextSegment.question,
     ]
@@ -284,21 +411,24 @@ function renderFallbackMessage(context: TutorMessageContext) {
   if (context.action === "retry") {
     return [
       context.evaluation?.incorrectExplanation ??
-        "Not quite. Let's tighten up the reasoning together.",
+        "Not quite — but that's okay, let's work through it.",
+      context.evaluation?.missedConcepts.length
+        ? `What was missing: ${context.evaluation.missedConcepts.join(", ")}.`
+        : null,
       context.state.remediationLevel > 1
-        ? `Let's slow this down. The missing idea is: ${context.evaluation?.idealAnswer}`
+        ? `Let's slow it down. The key thing to remember here: ${context.evaluation?.idealAnswer}`
         : null,
       `Memory tip: ${context.evaluation?.memoryTip ?? context.segment.memoryTip}`,
-      `Try this again: ${context.segment.question}`,
+      `Give it another shot: ${context.segment.question}`,
     ]
       .filter(Boolean)
       .join("\n\n");
   }
 
   return [
-    context.evaluation?.correctExplanation ?? "Nice work.",
+    context.evaluation?.correctExplanation ?? "Great work making it through this one.",
     context.lesson.completionMessage,
-    `Big takeaway: ${context.segment.idealAnswer}`,
+    `The big thing to take away: ${context.segment.idealAnswer}`,
   ].join("\n\n");
 }
 
@@ -316,6 +446,8 @@ async function generateModelMessage(context: TutorMessageContext) {
     `Current segment concept: ${context.segment.concept}`,
     `Current segment example: ${context.segment.example}`,
     `Current segment checkpoint question: ${context.segment.question}`,
+    context.segment.questionType ? `Question type: ${context.segment.questionType}` : null,
+    context.segment.difficulty ? `Question difficulty: ${context.segment.difficulty}` : null,
     `Action: ${context.action}`,
     `Tutoring mode: ${context.state.mode}`,
     `Preferred teaching language: ${context.state.preferredLanguage}`,
@@ -335,6 +467,12 @@ async function generateModelMessage(context: TutorMessageContext) {
     context.evaluation
       ? `Use this memory tip if needed: ${context.evaluation.memoryTip}`
       : `Ask the checkpoint question at the end.`,
+    context.action === "retry"
+      ? `Mastery rule: do not advance. Explain precisely why the answer was incomplete or inaccurate, name the missed concept, reteach briefly, and ask the same question or a close follow-up.`
+      : null,
+    context.action === "wrap"
+      ? `Summary rule: close with concise key takeaways the student should remember for the NHA CCMA exam.`
+      : null,
     context.state.mode === "quiz"
       ? `Mode rules: keep teaching minimal, ask the checkpoint quickly, and frame feedback like a guided exam coach.`
       : null,
@@ -345,8 +483,8 @@ async function generateModelMessage(context: TutorMessageContext) {
       ? `Mode rules: reinforce the weak idea with patient, repetitive coaching and a simple memory anchor.`
       : null,
     context.action === "wrap"
-      ? `Output rules: keep it under 140 words, sound like a supportive CNA instructor, recap the lesson, celebrate progress, and do not end with a question.`
-      : `Output rules: keep it under 140 words, sound like a supportive CNA instructor, and end with exactly one clear question.`,
+      ? `Output rules: keep it under 180 words, sound like a supportive CCMA instructor, recap the lesson, celebrate progress, and do not end with a question.`
+      : `Output rules: keep it under 180 words, sound like a supportive CCMA instructor, evaluate strictly, and end with exactly one clear question.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -361,7 +499,7 @@ async function generateModelMessage(context: TutorMessageContext) {
     }),
     input: prompt,
     store: false,
-    max_output_tokens: 220,
+    max_output_tokens: 360,
   });
 
   return response.output_text.trim();
@@ -494,4 +632,3 @@ export async function processTutorReply(args: {
     message,
   };
 }
-
