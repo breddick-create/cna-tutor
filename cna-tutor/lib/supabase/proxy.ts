@@ -2,12 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { env } from "@/lib/env";
-import {
-  isAnyPretestPath,
-  isPretestIntroPath,
-  isPretestStartPath,
-  isStudentProtectedPath,
-} from "@/lib/progression/paths";
 import type { Database } from "@/types/database";
 
 export async function updateSession(request: NextRequest) {
@@ -43,42 +37,8 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user || !isStudentProtectedPath(request.nextUrl.pathname)) {
-    return response;
-  }
-
-  const role = user.user_metadata?.role === "admin" ? "admin" : "student";
-  const product =
-    user.user_metadata?.product === "rda"
-      ? "rda"
-      : user.user_metadata?.product === "ccma"
-        ? "ccma"
-        : "cna";
-
-  if (role === "student" && product === "rda") {
-    return NextResponse.redirect(new URL("/rda/dashboard", request.url));
-  }
-
-  if (role === "student" && product === "ccma") {
-    return NextResponse.redirect(new URL("/ccma/dashboard", request.url));
-  }
-
-  const pretestComplete = typeof user.user_metadata?.pretest_completed_at === "string";
-  const onPretestIntroPath = isPretestIntroPath(request.nextUrl.pathname);
-  const onPretestStartPath = isPretestStartPath(request.nextUrl.pathname);
-  const onAnyPretestPath = isAnyPretestPath(request.nextUrl.pathname);
-
-  if (role === "student" && !pretestComplete && !onAnyPretestPath) {
-    return NextResponse.redirect(new URL("/pretest", request.url));
-  }
-
-  if (role === "student" && pretestComplete && (onPretestIntroPath || onPretestStartPath)) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
+  // Refresh the session cookie so it doesn't expire mid-visit.
+  await supabase.auth.getUser();
 
   return response;
 }

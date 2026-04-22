@@ -224,6 +224,8 @@ export default async function HomePage({
     redirect(`/sign-in?message=${encodeURIComponent(message)}`);
   }
 
+  let dashboardPath: string | null = null;
+
   if (viewer) {
     const product = await resolveEffectiveProductTrack({
       userId: viewer.user.id,
@@ -234,13 +236,11 @@ export default async function HomePage({
       redirect(getProductAdminPath(product));
     }
 
-    redirect(
-      await getStudentAuthRedirectPathForProduct({
-        product,
-        user: viewer.user,
-        userId: viewer.user.id,
-      }),
-    );
+    dashboardPath = await getStudentAuthRedirectPathForProduct({
+      product,
+      user: viewer.user,
+      userId: viewer.user.id,
+    });
   }
 
   return (
@@ -259,12 +259,20 @@ export default async function HomePage({
               <Link className="font-semibold text-[color:var(--brand-strong)]" href="/support">
                 Need help?
               </Link>
-              <Link className="button-secondary" href="/sign-in">
-                Sign In
-              </Link>
-              <Link className="button-primary" href="/sign-up">
-                Create Account
-              </Link>
+              {dashboardPath ? (
+                <Link className="button-primary" href={dashboardPath}>
+                  Go to dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link className="button-secondary" href="/sign-in">
+                    Sign In
+                  </Link>
+                  <Link className="button-primary" href="/sign-up">
+                    Create Account
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </header>
