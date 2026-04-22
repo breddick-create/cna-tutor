@@ -5,12 +5,12 @@ import { useFormStatus } from "react-dom";
 
 import type { RDAExamQuestion } from "@/content/rda/exam-bank";
 
-function SubmitAssessmentButton() {
+function SubmitAssessmentButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
 
   return (
     <button className="button-primary w-full sm:w-auto" disabled={pending} type="submit">
-      {pending ? "Scoring..." : "Submit pre-test"}
+      {pending ? "Scoring..." : label}
     </button>
   );
 }
@@ -18,9 +18,11 @@ function SubmitAssessmentButton() {
 export function RdaAssessmentRunner({
   action,
   questions,
+  submitLabel = "Submit pre-test",
 }: {
   action: (formData: FormData) => void | Promise<void>;
   questions: RDAExamQuestion[];
+  submitLabel?: string;
 }) {
   const [started, setStarted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -56,7 +58,7 @@ export function RdaAssessmentRunner({
               Submit only after every question has an answer.
             </p>
           </div>
-          <SubmitAssessmentButton />
+          <SubmitAssessmentButton label={submitLabel} />
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-[rgba(23,60,255,0.1)]">
           <div
@@ -105,7 +107,7 @@ export function RdaAssessmentRunner({
         <p className="text-sm font-semibold">
           Final check: {answeredCount}/{questions.length} answered
         </p>
-        <SubmitAssessmentButton />
+        <SubmitAssessmentButton label={submitLabel} />
       </div>
     </form>
   );

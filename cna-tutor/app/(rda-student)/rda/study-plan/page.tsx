@@ -24,7 +24,7 @@ export default async function RdaStudyPlanPage() {
             <h2 className="mt-2 text-xl font-semibold">{lesson.title}</h2>
             <p className="text-muted mt-2 text-sm leading-6">{lesson.summary}</p>
             <div className="mt-4">
-              <Link className="button-secondary" href={`/rda/study-plan?lesson=${lesson.id}`}>
+              <Link className="button-secondary" href={`/rda/study/${lesson.id}`}>
                 Review lesson
               </Link>
             </div>

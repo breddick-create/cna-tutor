@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { signOutAction } from "@/app/(rda-student)/actions";
+
 import {
   getProductAdminPath,
   getStudentAuthRedirectPathForProduct,
@@ -59,12 +61,20 @@ export default async function RdaStudentLayout({ children }: { children: ReactNo
             <Link className="text-lg font-semibold" href="/rda/dashboard">
               RDA Tutor
             </Link>
-            <nav className="flex flex-wrap gap-3 text-sm font-semibold text-[color:var(--brand-strong)]">
+            <nav className="flex flex-wrap items-center gap-3 text-sm font-semibold text-[color:var(--brand-strong)]">
               <Link href="/rda/dashboard">Dashboard</Link>
               <Link href="/rda/study-plan">Study Plan</Link>
               <Link href="/rda/quiz">Quiz</Link>
               <Link href="/rda/mock-exam">Mock Exam</Link>
               <Link href="/rda/exam-day">Exam Day</Link>
+              <form action={signOutAction}>
+                <button
+                  className="rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold text-[color:var(--muted)] transition hover:border-[color:var(--brand)] hover:text-[color:var(--brand-strong)]"
+                  type="submit"
+                >
+                  Sign out
+                </button>
+              </form>
             </nav>
           </div>
         </header>
