@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { StartLessonButton } from "@/components/rda/start-lesson-button";
 import { requireRdaViewer } from "@/lib/rda/auth/session";
 import { hasCompletedRdaPretest } from "@/lib/rda/progression";
 import { getRdaTutorLesson } from "@/lib/rda/tutor/lessons";
@@ -96,12 +97,14 @@ export default async function RdaStudyLessonPage({ params }: Props) {
       </section>
 
       <section className="panel rounded-[1.75rem] p-5">
-        <p className="eyebrow">Completion</p>
-        <p className="mt-3 text-sm leading-6">{lesson.completionMessage}</p>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <Link className="button-primary" href="/rda/quiz">
-            Test yourself with a quiz
-          </Link>
+        <p className="eyebrow">Start This Lesson</p>
+        <p className="mt-3 text-sm leading-6">
+          The interactive lesson walks you through all {lesson.segments.length} steps with feedback on
+          each answer. You need both the clinical action and the safety, workflow, or scope reason to
+          pass each step.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <StartLessonButton lessonId={lesson.id} />
           <Link className="button-secondary" href="/rda/study-plan">
             Back to study plan
           </Link>
