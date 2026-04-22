@@ -79,7 +79,7 @@ export default async function StudentLayout({
   const metadataProduct = resolveProductFromMetadata(viewer.user.user_metadata?.product);
   const product = await resolveEffectiveProductTrack({
     userId: viewer.user.id,
-    // Trust metadata when it says a non-CNA track — catches RDA users with stale profile.product
+    // Trust metadata when it says a non-CNA track — catches CCMA users with stale profile.product
     selectedProduct: metadataProduct !== "cna" ? metadataProduct : null,
     profileProduct: resolveProductFromProfile(viewer.profile),
   });

@@ -14,7 +14,7 @@ export default function AuthLayout({
           <div className="inline-flex rounded-[1.5rem] bg-white px-5 py-4 shadow-[0_18px_40px_rgba(15,34,60,0.22)]">
             <BrandLogo className="w-[280px]" priority width={280} />
           </div>
-          <p className="mt-8 text-xs font-semibold uppercase tracking-[0.24em] text-white/74">CNA, CCMA, and Texas RDA Exam Prep</p>
+          <p className="mt-8 text-xs font-semibold uppercase tracking-[0.24em] text-white/74">CNA &amp; CCMA Exam Prep</p>
           <h1 className="mt-4 max-w-xl text-5xl font-semibold leading-tight">
             A calm, clear place to sign in and keep moving through your exam prep.
           </h1>

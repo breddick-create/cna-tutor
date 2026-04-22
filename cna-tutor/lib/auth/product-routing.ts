@@ -2,10 +2,8 @@ import type { User } from "@supabase/supabase-js";
 
 import { getStudentAuthRedirectPathForUser as getCcmaStudentAuthRedirectPathForUser } from "@/lib/ccma/progression/stage";
 import { getStudentAuthRedirectPathForUser as getCnaStudentAuthRedirectPathForUser } from "@/lib/progression/stage";
-import { getRdaStudentAuthRedirectPathForUser } from "@/lib/rda/progression";
-import { createAdminClient } from "@/lib/supabase/admin";
 
-export type ProductTrack = "cna" | "ccma" | "rda";
+export type ProductTrack = "cna" | "ccma";
 
 export const PRODUCT_TRACK_OPTIONS: Array<{
   value: ProductTrack;
@@ -14,58 +12,34 @@ export const PRODUCT_TRACK_OPTIONS: Array<{
 }> = [
   { value: "cna", label: "CNA Tutor", shortLabel: "CNA" },
   { value: "ccma", label: "CCMA Tutor", shortLabel: "CCMA" },
-  { value: "rda", label: "RDA Tutor", shortLabel: "RDA" },
 ];
 
 export function resolveProductTrack(value: unknown): ProductTrack {
-  return value === "ccma" || value === "rda" ? value : "cna";
+  return value === "ccma" ? "ccma" : "cna";
 }
 
 export function isProductTrack(value: unknown): value is ProductTrack {
-  return value === "cna" || value === "ccma" || value === "rda";
+  return value === "cna" || value === "ccma";
 }
 
 export function getProductAdminPath(product: ProductTrack) {
   if (product === "ccma") return "/ccma-admin";
-  if (product === "rda") return "/rda-admin";
   return "/admin";
 }
 
 export function getProductDashboardPath(product: ProductTrack) {
   if (product === "ccma") return "/ccma/dashboard";
-  if (product === "rda") return "/rda/dashboard";
   return "/dashboard";
 }
 
 export function getProductPretestPath(product: ProductTrack) {
   if (product === "ccma") return "/ccma/pretest";
-  if (product === "rda") return "/rda/pretest";
   return "/pretest";
 }
 
 export function getProductSignInPath(product: ProductTrack) {
-  if (product === "rda") return "/sign-in?product=rda";
   if (product === "ccma") return "/sign-in?product=ccma";
   return "/sign-in?product=cna";
-}
-
-export async function hasRdaProductEvidence(userId: string) {
-  const admin = createAdminClient();
-  const [{ data: rdaProfile }, { data: rdaPretest }] = await Promise.all([
-    admin
-      .from("rda_profiles")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    admin
-      .from("rda_pretest_results")
-      .select("user_id")
-      .eq("user_id", userId)
-      .limit(1)
-      .maybeSingle(),
-  ]);
-
-  return Boolean(rdaProfile || rdaPretest);
 }
 
 export async function resolveEffectiveProductTrack(args: {
@@ -77,19 +51,14 @@ export async function resolveEffectiveProductTrack(args: {
     return args.selectedProduct;
   }
 
-  const savedProduct = isProductTrack(args.profileProduct) ? args.profileProduct : "cna";
-
-  if (savedProduct === "cna" && (await hasRdaProductEvidence(args.userId))) {
-    return "rda";
-  }
-
-  return savedProduct;
+  return isProductTrack(args.profileProduct) ? args.profileProduct : "cna";
 }
 
 export async function persistUserProductTrack(args: {
   user: User;
   product: ProductTrack;
 }) {
+  const { createAdminClient } = await import("@/lib/supabase/admin");
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
@@ -114,10 +83,6 @@ export async function getStudentAuthRedirectPathForProduct(args: {
   user: User;
   userId: string;
 }) {
-  if (args.product === "rda") {
-    return getRdaStudentAuthRedirectPathForUser({ user: args.user });
-  }
-
   if (args.product === "ccma") {
     return getCcmaStudentAuthRedirectPathForUser({
       user: args.user,

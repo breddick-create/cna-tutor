@@ -13,7 +13,6 @@ import {
 } from "@/lib/auth/product-routing";
 import { getViewer, resolveProductFromProfile } from "@/lib/auth/session";
 import { LANGUAGE_OPTIONS } from "@/lib/i18n/languages";
-import { ensureRdaProfileForUser } from "@/lib/rda/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -41,15 +40,6 @@ export default async function SignUpPage({
     });
     if (requestedProductFromParams || product !== storedProduct || viewer.user.user_metadata?.product !== product) {
       await persistUserProductTrack({ user: viewer.user, product });
-      if (product === "rda") {
-        await ensureRdaProfileForUser({
-          ...viewer.user,
-          user_metadata: {
-            ...viewer.user.user_metadata,
-            product,
-          },
-        });
-      }
     }
     if (viewer.profile.role === "admin") {
       redirect(getProductAdminPath(product));
@@ -75,7 +65,7 @@ export default async function SignUpPage({
         <p className="text-sm font-semibold">What happens right after you sign up</p>
         <div className="mt-4 space-y-3">
           <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/85 px-4 py-3">
-            <p className="text-sm leading-6">1. You choose CNA, CCMA, or RDA and start with the pre-test</p>
+            <p className="text-sm leading-6">1. You choose CNA or CCMA and start with the pre-test</p>
           </div>
           <div className="rounded-[1.25rem] border border-[var(--border)] bg-white/85 px-4 py-3">
             <p className="text-sm leading-6">2. Your results identify weak areas</p>

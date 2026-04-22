@@ -12,7 +12,6 @@ import {
   resolveEffectiveProductTrack,
 } from "@/lib/auth/product-routing";
 import { getViewer, resolveProductFromProfile } from "@/lib/auth/session";
-import { ensureRdaProfileForUser } from "@/lib/rda/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -37,15 +36,6 @@ export default async function SignInPage({
     });
     if (requestedProduct || product !== storedProduct || viewer.user.user_metadata?.product !== product) {
       await persistUserProductTrack({ user: viewer.user, product });
-      if (product === "rda") {
-        await ensureRdaProfileForUser({
-          ...viewer.user,
-          user_metadata: {
-            ...viewer.user.user_metadata,
-            product,
-          },
-        });
-      }
     }
     if (viewer.profile.role === "admin") {
       redirect(getProductAdminPath(product));

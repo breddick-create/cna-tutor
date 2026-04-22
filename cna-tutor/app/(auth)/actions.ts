@@ -19,7 +19,6 @@ import {
 import { resolveAppUrl } from "@/lib/app-url";
 import { env } from "@/lib/env";
 import { resolvePreferredLanguage } from "@/lib/i18n/languages";
-import { ensureRdaProfileForUser } from "@/lib/rda/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -116,10 +115,6 @@ export async function signInAction(formData: FormData) {
       redirect(buildRedirect("/sign-in", "We couldn't load your profile. Please try again."));
     }
 
-    if (effectiveProduct === "rda") {
-      await ensureRdaProfileForUser(user);
-    }
-
     const now = new Date().toISOString();
 
     await admin
@@ -207,9 +202,6 @@ export async function signUpAction(formData: FormData) {
         .eq("id", signUpData.user.id);
     }
 
-    if (product === "rda") {
-      await ensureRdaProfileForUser(signUpData.user);
-    }
   }
 
   if (signUpData.session && signUpData.user) {

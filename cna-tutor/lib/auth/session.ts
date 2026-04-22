@@ -18,7 +18,7 @@ export type Viewer = {
   profile: Profile;
 };
 
-export function resolveProductFromMetadata(value: unknown): "cna" | "ccma" | "rda" {
+export function resolveProductFromMetadata(value: unknown): "cna" | "ccma" {
   return resolveProductTrack(value);
 }
 

@@ -15,7 +15,7 @@ const mono = Source_Code_Pro({
 
 export const metadata: Metadata = {
   title: "HCCI Tutor",
-  description: "A guided readiness-first study app for CNA, CCMA, and Texas RDA exam prep",
+  description: "A guided readiness-first study app for CNA and CCMA exam prep",
 };
 
 export default function RootLayout({

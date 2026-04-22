@@ -7,7 +7,6 @@ import {
   resolveEffectiveProductTrack,
 } from "@/lib/auth/product-routing";
 import { resolveProductFromMetadata } from "@/lib/auth/session";
-import { ensureRdaProfileForUser } from "@/lib/rda/auth/session";
 import { createClient } from "@/lib/supabase/server";
 
 function buildSignInRedirect(requestUrl: URL, message: string) {
@@ -64,15 +63,6 @@ export async function GET(request: Request) {
       });
       if (existingProfile?.product !== product || user.user_metadata?.product !== product) {
         await persistUserProductTrack({ user, product });
-        if (product === "rda") {
-          await ensureRdaProfileForUser({
-            ...user,
-            user_metadata: {
-              ...user.user_metadata,
-              product,
-            },
-          });
-        }
       }
       next = shouldHonorRequestedNext(requestedNext)
         ? requestedNext ?? "/reset-password"

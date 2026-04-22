@@ -27,7 +27,7 @@ type ProgramBenefit = {
 };
 
 const heroValueProps = [
-  "Choose CNA, CCMA, or RDA before you start so the study path matches your exam.",
+  "Choose CNA or CCMA before you start so the study path matches your exam.",
   "Begin with a pre-test that shows what needs help first.",
   "Follow a structured plan with one clear next step at every stage.",
 ];
@@ -252,7 +252,7 @@ export default async function HomePage({
               <div className="inline-flex rounded-[1.25rem] bg-white px-4 py-3 shadow-[0_12px_28px_rgba(32,48,61,0.08)]">
                 <BrandLogo className="w-[160px]" priority width={160} />
               </div>
-              <p className="eyebrow mt-4">CNA, CCMA, And RDA Exam Prep</p>
+              <p className="eyebrow mt-4">CNA &amp; CCMA Exam Prep</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -282,7 +282,7 @@ export default async function HomePage({
             <div>
               <p className="eyebrow">Readiness-First Exam Prep</p>
               <h1 className="mt-4 max-w-4xl text-4xl font-semibold leading-tight sm:text-5xl">
-                Pass the CNA, CCMA, or Texas RDA exam with a clear plan built around your weak areas.
+                Pass the CNA or CCMA exam with a clear plan built around your weak areas.
               </h1>
               <p className="text-muted mt-5 max-w-3xl text-lg leading-8">
                 Start by choosing your exam track, take the matching pre-test, get a focused study plan, and keep moving until you&apos;re exam-ready.
@@ -402,7 +402,7 @@ export default async function HomePage({
             <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/78 p-5 text-left">
               <p className="text-sm font-semibold">I&apos;m a student</p>
               <p className="text-muted mt-2 text-sm leading-6">
-                Choose CNA, CCMA, or RDA, create your account, and start the matching pre-test.
+                Choose CNA or CCMA, create your account, and start the matching pre-test.
               </p>
               <div className="mt-4">
                 <Link className="button-primary w-full md:w-auto" href="/sign-up">
@@ -414,7 +414,7 @@ export default async function HomePage({
             <div className="rounded-[1.5rem] border border-[var(--border)] bg-white/78 p-5 text-left">
               <p className="text-sm font-semibold">I&apos;m a program coordinator</p>
               <p className="text-muted mt-2 text-sm leading-6">
-                Get in touch about using HCCI Tutor across CNA, CCMA, and RDA programs.
+                Get in touch about using HCCI Tutor across CNA and CCMA programs.
               </p>
               <div className="mt-4">
                 <Link className="button-secondary w-full md:w-auto" href="/support">
