@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useLanguage } from "@/components/student/language-context";
 import { StudentEmptyState } from "@/components/student/student-empty-state";
+import type { SupplementaryVideo } from "@/content/texas-cna/video-library";
 import { getTutorModeLabel } from "@/lib/tutor/mode-labels";
 import type { TutorLesson, TutorSessionState } from "@/lib/tutor/types";
 import { formatHours } from "@/lib/utils";
@@ -119,6 +120,7 @@ export function StudySession({
   initialLesson,
   initialSession,
   initialTurns,
+  supplementaryVideos = [],
 }: {
   initialLesson: TutorLesson;
   initialSession: {
@@ -128,6 +130,7 @@ export function StudySession({
     activeSeconds: number;
   };
   initialTurns: StudyTurn[];
+  supplementaryVideos?: SupplementaryVideo[];
 }) {
   const { t } = useLanguage();
   const [turns, setTurns] = useState(initialTurns);
@@ -581,6 +584,50 @@ export function StudySession({
           <p className="eyebrow">{t({ en: "Lesson Goal", es: "Meta de la leccion" })}</p>
           <p className="mt-3 text-sm leading-7">{initialLesson.learningGoal}</p>
         </div>
+
+        {supplementaryVideos.length > 0 ? (
+          <div className="panel rounded-[1.5rem] p-5">
+            <p className="eyebrow">{t({ en: "Watch & Learn", es: "Ver y aprender" })}</p>
+            <p className="text-muted mt-2 text-xs leading-5">
+              {t({
+                en: "Supplementary videos for this topic",
+                es: "Videos suplementarios para este tema",
+              })}
+            </p>
+            <div className="mt-4 space-y-3">
+              {supplementaryVideos.map((video) => (
+                <a
+                  key={video.youtubeId}
+                  href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block overflow-hidden rounded-[1rem] border border-[var(--border)] bg-white/78 transition-shadow hover:shadow-md"
+                >
+                  <div className="relative aspect-video w-full overflow-hidden bg-black/10">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://img.youtube.com/vi/${video.youtubeId}/mqdefault.jpg`}
+                      alt={video.title}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow">
+                        <svg className="ml-0.5 h-4 w-4 text-[color:var(--brand)]" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M8 5v14l11-7z" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-3">
+                    <p className="text-xs font-semibold leading-5 line-clamp-2">{video.title}</p>
+                    <p className="text-muted mt-1 text-xs">{video.channelName}</p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="panel rounded-[1.5rem] p-5">
           <p className="eyebrow">{t({ en: "Next", es: "Siguiente" })}</p>

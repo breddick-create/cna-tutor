@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { StudySession } from "@/components/ccma/study-session";
+import { getSupplementaryVideos } from "@/content/ccma/video-library";
 import { requireCcmaViewer } from "@/lib/ccma/auth/session";
 import { getPretestDomainBreakdown, getPretestScore } from "@/lib/ccma/onboarding/pretest";
 import {
@@ -83,6 +84,7 @@ export default async function StudySessionPage({
         correctness: turn.correctness,
         turnType: turn.turn_type,
       }))}
+      supplementaryVideos={getSupplementaryVideos(lesson.domainSlug)}
     />
   );
 }
