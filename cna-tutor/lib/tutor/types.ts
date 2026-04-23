@@ -73,6 +73,7 @@ export type TutorSessionState = {
   lastMatchedConcepts: string[];
   weakAreasSnapshot: string[];
   sessionComplete: boolean;
+  struggledSegmentIds: string[];
 };
 
 export type TutorEvaluation = {

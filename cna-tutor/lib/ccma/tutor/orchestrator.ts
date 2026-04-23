@@ -224,6 +224,7 @@ export function createInitialTutorSessionState(
     lastMatchedConcepts: [],
     weakAreasSnapshot,
     sessionComplete: false,
+    struggledSegmentIds: [],
   };
 }
 
@@ -272,6 +273,7 @@ export function parseTutorSessionState(
     lastMatchedConcepts: raw.lastMatchedConcepts ?? [],
     weakAreasSnapshot: raw.weakAreasSnapshot ?? [],
     sessionComplete: raw.sessionComplete ?? false,
+    struggledSegmentIds: raw.struggledSegmentIds ?? [],
   } satisfies TutorSessionState;
 }
 
@@ -355,6 +357,12 @@ export function advanceTutorSessionState(
     };
   }
 
+  const currentSegmentId = lesson.segments[state.currentSegmentIndex]?.id;
+  const struggledSegmentIds =
+    currentSegmentId && !state.struggledSegmentIds.includes(currentSegmentId)
+      ? [...state.struggledSegmentIds, currentSegmentId]
+      : state.struggledSegmentIds;
+
   const newAttempts = state.attemptsOnCurrentQuestion + 1;
 
   // After max retries, force-advance so the tutor never loops indefinitely on a single question.
@@ -376,6 +384,7 @@ export function advanceTutorSessionState(
         }),
         masteryScore: calculateMastery(state.correctCount, state.totalQuestions),
         sessionComplete,
+        struggledSegmentIds,
       } satisfies TutorSessionState,
       action: sessionComplete ? "wrap" : "advance",
       forcedAdvance: true,
@@ -395,6 +404,7 @@ export function advanceTutorSessionState(
       }),
       masteryScore: calculateMastery(state.correctCount, state.totalQuestions),
       sessionComplete: false,
+      struggledSegmentIds,
     } satisfies TutorSessionState,
     action: "retry",
     forcedAdvance: false,
@@ -456,10 +466,16 @@ function renderFallbackMessage(context: TutorMessageContext) {
       .join("\n\n");
   }
 
+  const struggledTitles = context.state.struggledSegmentIds
+    .map((id) => context.lesson.segments.find((s) => s.id === id)?.title)
+    .filter(Boolean);
+
   return [
-    context.evaluation?.correctExplanation ?? "Great work making it through this one.",
     context.lesson.completionMessage,
-    `The big thing to take away: ${context.segment.idealAnswer}`,
+    struggledTitles.length > 0
+      ? `You did well overall, but make sure to revisit these before the NHA CCMA exam: ${struggledTitles.join(", ")}.`
+      : `You showed strong understanding throughout — great work on ${context.lesson.title}.`,
+    `Key takeaway: ${context.segment.idealAnswer}`,
   ].join("\n\n");
 }
 
@@ -511,7 +527,15 @@ async function generateModelMessage(context: TutorMessageContext) {
       ? `Forced advance: The learner did not reach mastery on "${context.segment.title}" after ${MAX_RETRIES_PER_SEGMENT} attempts. Do NOT say "correct" or "great job." Instead: acknowledge directly that this concept was tricky ("This one's tough — let's make sure you have it before the exam."), state the correct answer in one clear sentence, share the memory tip, then transition forward with something like "Let's keep moving — next up is: [next segment title]." Keep the tone supportive and forward-looking.`
       : null,
     context.action === "wrap"
-      ? `Summary rule: close with concise key takeaways the student should remember for the NHA CCMA exam.`
+      ? (() => {
+          const struggledTitles = context.state.struggledSegmentIds
+            .map((id) => context.lesson.segments.find((s) => s.id === id)?.title)
+            .filter(Boolean);
+          if (struggledTitles.length > 0) {
+            return `Summary rule: the student completed the lesson but struggled on some concepts. Give a brief overview of what was covered in "${context.lesson.title}", then explicitly name these topics they should revisit before the NHA CCMA exam: ${struggledTitles.join(", ")}. Be encouraging but direct — tell them which specific areas to keep working on.`;
+          }
+          return `Summary rule: the student demonstrated solid understanding throughout "${context.lesson.title}". Give a positive recap of the key concepts covered. Celebrate their progress. Keep it concise and motivating.`;
+        })()
       : null,
     context.state.mode === "quiz"
       ? `Mode rules: keep teaching minimal, ask the checkpoint quickly, and frame feedback like a guided exam coach.`
