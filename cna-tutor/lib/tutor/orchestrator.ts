@@ -141,6 +141,23 @@ function isTooVagueForMastery(
   return false;
 }
 
+function semanticMatchesIdealAnswer(studentMessage: string, idealAnswer: string): boolean {
+  const studentWords = getWords(normalizeText(studentMessage));
+  const idealWords = getWords(normalizeText(idealAnswer)).filter((w) => w.length >= 4);
+  if (idealWords.length === 0) return false;
+  const hits = idealWords.filter((idealWord) =>
+    studentWords.some(
+      (sw) => sw === idealWord || sw.startsWith(idealWord) || idealWord.startsWith(sw),
+    ),
+  ).length;
+  return hits / idealWords.length >= 0.5;
+}
+
+function tutorRevealedAnswer(lastTutorMessage: string | null, segment: LessonSegment): boolean {
+  if (!lastTutorMessage) return false;
+  return semanticMatchesIdealAnswer(lastTutorMessage, segment.idealAnswer);
+}
+
 function getCurrentSegment(lesson: TutorLesson, state: TutorSessionState) {
   return lesson.segments[Math.min(state.currentSegmentIndex, lesson.segments.length - 1)];
 }
@@ -224,6 +241,7 @@ export function createInitialTutorSessionState(
     totalQuestions: lesson.segments.length,
     masteryScore: 0,
     lastStudentMessage: null,
+    lastTutorMessage: null,
     lastMatchedConcepts: [],
     weakAreasSnapshot,
     sessionComplete: false,
@@ -273,6 +291,7 @@ export function parseTutorSessionState(
     totalQuestions: raw.totalQuestions ?? 0,
     masteryScore: raw.masteryScore ?? 0,
     lastStudentMessage: raw.lastStudentMessage ?? null,
+    lastTutorMessage: raw.lastTutorMessage ?? null,
     lastMatchedConcepts: raw.lastMatchedConcepts ?? [],
     weakAreasSnapshot: raw.weakAreasSnapshot ?? [],
     sessionComplete: raw.sessionComplete ?? false,
@@ -489,13 +508,16 @@ async function generateModelMessage(context: TutorMessageContext) {
     return null;
   }
 
+  const segmentNumber = context.state.currentSegmentIndex + 1;
+  const totalSegments = context.lesson.segments.length;
+
   const prompt = [
     `Lesson title: ${context.lesson.title}`,
     `Lesson goal: ${context.lesson.learningGoal}`,
-    `Current segment: ${context.segment.title}`,
+    `Lesson progress: topic ${segmentNumber} of ${totalSegments} — "${context.segment.title}"`,
     `Current segment concept: ${context.segment.concept}`,
     `Current segment example: ${context.segment.example}`,
-    `Current segment checkpoint question: ${context.segment.question}`,
+    `Checkpoint question for this topic: ${context.segment.question}`,
     context.segment.questionType ? `Question type: ${context.segment.questionType}` : null,
     context.segment.difficulty ? `Question difficulty: ${context.segment.difficulty}` : null,
     `Action: ${context.action}`,
@@ -549,9 +571,15 @@ async function generateModelMessage(context: TutorMessageContext) {
     context.state.mode === "weak_area_review"
       ? `Mode rules: reinforce the weak idea with patient, repetitive coaching and a simple memory anchor.`
       : null,
+    context.action === "advance" && !context.state.sessionComplete
+      ? `Transition instruction: The student answered the previous topic correctly. Briefly acknowledge it (1 sentence), then say "Now let's move on to topic ${segmentNumber} of ${totalSegments}: ${context.segment.title}." Introduce the new concept, then close with the checkpoint question below.`
+      : null,
+    context.action !== "wrap"
+      ? `Required closing question — you MUST end your response with this question, word for word or a minimal natural rephrasing: "${context.segment.question}". Do not substitute a different question. The grader evaluates against this exact concept.`
+      : null,
     context.action === "wrap"
-      ? `Output rules: keep it under 180 words, sound like a supportive CNA instructor, recap the lesson, celebrate progress, and do not end with a question.`
-      : `Output rules: keep it under 180 words, sound like a supportive CNA instructor, evaluate strictly, and end with exactly one clear question.`,
+      ? `Output rules: keep it under 200 words, sound like a supportive CNA instructor, recap the lesson, celebrate progress, and do not end with a question.`
+      : `Output rules: keep it under 180 words, sound like a supportive CNA instructor, evaluate strictly, and end with the required checkpoint question above.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -609,6 +637,7 @@ export async function buildInitialTutorTurn(lessonId: string) {
     state: {
       ...state,
       step: "teach",
+      lastTutorMessage: message,
     } satisfies TutorSessionState,
     message,
   };
@@ -647,6 +676,7 @@ export async function buildInitialTutorTurnForMode(args: {
     state: {
       ...state,
       step: "teach",
+      lastTutorMessage: message,
     } satisfies TutorSessionState,
     message,
   };
@@ -664,13 +694,23 @@ export async function processTutorReply(args: {
   }
 
   const currentSegment = getCurrentSegment(lesson, args.state);
-  const evaluation = evaluateStudentAnswer(currentSegment, args.studentMessage);
-  const transition = advanceTutorSessionState(
-    lesson,
-    args.state,
-    args.studentMessage,
-    evaluation,
-  );
+  const rawEvaluation = evaluateStudentAnswer(currentSegment, args.studentMessage);
+
+  // If the tutor stated the answer in the previous turn (by prompt rule at remediationLevel >= 2,
+  // or because the tutor message itself overlapped with the ideal answer), credit the student
+  // for restating it rather than marking it wrong again.
+  const tutorGaveAnswer =
+    args.state.remediationLevel >= 2 ||
+    tutorRevealedAnswer(args.state.lastTutorMessage, currentSegment);
+
+  const evaluation =
+    !rawEvaluation.correct &&
+    tutorGaveAnswer &&
+    semanticMatchesIdealAnswer(args.studentMessage, currentSegment.idealAnswer)
+      ? { ...rawEvaluation, correct: true }
+      : rawEvaluation;
+
+  const transition = advanceTutorSessionState(lesson, args.state, args.studentMessage, evaluation);
 
   const messageSegment =
     transition.action === "advance" && !transition.nextState.sessionComplete
@@ -687,16 +727,15 @@ export async function processTutorReply(args: {
     forcedAdvance: transition.forcedAdvance,
   });
 
+  const completedState: TutorSessionState =
+    transition.action === "wrap"
+      ? { ...transition.nextState, step: "completed" }
+      : transition.nextState;
+
   return {
     lesson,
     evaluation,
-    nextState:
-      transition.action === "wrap"
-        ? {
-            ...transition.nextState,
-            step: "completed",
-          }
-        : transition.nextState,
+    nextState: { ...completedState, lastTutorMessage: message },
     message,
   };
 }

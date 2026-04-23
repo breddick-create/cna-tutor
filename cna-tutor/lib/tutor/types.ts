@@ -70,6 +70,7 @@ export type TutorSessionState = {
   totalQuestions: number;
   masteryScore: number;
   lastStudentMessage: string | null;
+  lastTutorMessage: string | null;
   lastMatchedConcepts: string[];
   weakAreasSnapshot: string[];
   sessionComplete: boolean;
