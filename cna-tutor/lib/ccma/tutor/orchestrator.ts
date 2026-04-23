@@ -164,8 +164,9 @@ export function parseTutorSessionState(
 
   // Old-format state (no topics array) — rebuild from the lesson definition
   if (!Array.isArray(raw.topics) || raw.topics.length === 0) {
-    if (!lessonId) return null;
-    const fresh = createInitialTutorSessionState(lessonId, modeOverride);
+    const id = lessonId ?? (raw.lessonId as string | undefined);
+    if (!id) return null;
+    const fresh = createInitialTutorSessionState(id, modeOverride);
     return {
       ...fresh,
       mode: modeOverride ?? (raw.mode as TutorMode),
