@@ -51,11 +51,14 @@ function keywordMatches(normalizedStudentMessage: string, keyword: string) {
     return false;
   }
 
-  const studentWords = new Set(getWords(normalizedStudentMessage));
+  const studentWords = getWords(normalizedStudentMessage);
   const keywordWords = getWords(normalizedKeyword);
 
   if (keywordWords.length <= 1) {
-    return studentWords.has(normalizedKeyword);
+    // Prefix match handles stems: "schedul" matches "scheduling", "scheduled", "schedule"
+    return studentWords.some(
+      (word) => word === normalizedKeyword || word.startsWith(normalizedKeyword),
+    );
   }
 
   return normalizedStudentMessage
