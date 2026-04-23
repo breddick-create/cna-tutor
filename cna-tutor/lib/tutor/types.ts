@@ -2,7 +2,6 @@ import type { SupportedLanguage } from "@/lib/i18n/languages";
 import type { Database } from "@/types/database";
 
 export type TutorMode = Database["public"]["Tables"]["tutor_sessions"]["Row"]["mode"];
-export type TutorDifficultyTier = "foundation" | "standard" | "challenge";
 
 export type TutorStep =
   | "intro"
@@ -57,24 +56,33 @@ export type TutorLesson = {
   nextRecommendedLessonIds: string[];
 };
 
+// Per-topic tracking — the source of truth for progression
+export type TopicState = {
+  id: string;
+  title: string;
+  taught: boolean;   // true when covered (whether mastered or force-advanced)
+  attempts: number;
+  mastered: boolean; // true only when the student answered correctly
+};
+
 export type TutorSessionState = {
   lessonId: string;
   mode: TutorMode;
   preferredLanguage: SupportedLanguage;
-  currentSegmentIndex: number;
-  step: TutorStep;
-  attemptsOnCurrentQuestion: number;
-  remediationLevel: number;
-  difficultyTier: TutorDifficultyTier;
+  // Explicit topic list — control flow is driven by this, not the model
+  topics: TopicState[];
+  currentTopicIndex: number;
+  currentTopicAttempts: number;
+  awaitingAnswer: boolean;
+  tutorLastGaveAnswer: boolean; // if true, auto-credit the next student response
+  // Progress summary (used by API route and progress tracker)
   correctCount: number;
-  totalQuestions: number;
   masteryScore: number;
-  lastStudentMessage: string | null;
-  lastTutorMessage: string | null;
-  lastMatchedConcepts: string[];
   weakAreasSnapshot: string[];
   sessionComplete: boolean;
-  struggledSegmentIds: string[];
+  lastStudentMessage: string | null;
+  lastTutorMessage: string | null;
+  step: TutorStep; // used by API route for DB turn_type logging
 };
 
 export type TutorEvaluation = {
@@ -86,14 +94,4 @@ export type TutorEvaluation = {
   correctExplanation: string;
   incorrectExplanation: string;
   memoryTip: string;
-};
-
-export type TutorMessageContext = {
-  action: "intro" | "advance" | "retry" | "wrap";
-  lesson: TutorLesson;
-  segment: LessonSegment;
-  state: TutorSessionState;
-  evaluation: TutorEvaluation | null;
-  studentMessage: string | null;
-  forcedAdvance?: boolean;
 };

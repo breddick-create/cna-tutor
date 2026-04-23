@@ -545,14 +545,14 @@ export function StudySession({
           <p className="mt-3 text-2xl font-semibold capitalize">{sessionStatus}</p>
           <p className="text-muted mt-3 text-sm leading-6">
             {t({
-              en: `Current score: ${sessionState.masteryScore}% across ${sessionState.totalQuestions} guided checks.`,
-              es: `Puntaje actual: ${sessionState.masteryScore}% en ${sessionState.totalQuestions} revisiones guiadas.`,
+              en: `Current score: ${sessionState.masteryScore}% across ${sessionState.topics.length} topics.`,
+              es: `Puntaje actual: ${sessionState.masteryScore}% en ${sessionState.topics.length} temas.`,
             })}
           </p>
           <p className="text-muted mt-2 text-sm leading-6">
             {t({
-              en: `Difficulty: ${sessionState.difficultyTier} - support level ${sessionState.remediationLevel}`,
-              es: `Dificultad: ${sessionState.difficultyTier} - nivel de apoyo ${sessionState.remediationLevel}`,
+              en: `Topic ${sessionState.currentTopicIndex + 1} of ${sessionState.topics.length} — attempt ${sessionState.currentTopicAttempts} of 3`,
+              es: `Tema ${sessionState.currentTopicIndex + 1} de ${sessionState.topics.length} — intento ${sessionState.currentTopicAttempts} de 3`,
             })}
           </p>
         </div>
@@ -565,8 +565,8 @@ export function StudySession({
               style={{
                 width: `${Math.max(
                   12,
-                  ((sessionState.currentSegmentIndex + (sessionStatus === "completed" ? 1 : 0)) /
-                    sessionState.totalQuestions) *
+                  ((sessionState.currentTopicIndex + (sessionStatus === "completed" ? 1 : 0)) /
+                    sessionState.topics.length) *
                     100,
                 )}%`,
               }}

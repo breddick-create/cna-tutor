@@ -4,210 +4,118 @@ import { getTutorLesson, resolveLessonMode } from "@/lib/ccma/tutor/lessons";
 import { DEFAULT_TUTOR_MODEL, getOpenAIClient } from "@/lib/ccma/tutor/openai";
 import type {
   LessonSegment,
+  TopicState,
   TutorEvaluation,
-  TutorDifficultyTier,
   TutorLesson,
-  TutorMessageContext,
   TutorMode,
   TutorSessionState,
 } from "@/lib/ccma/tutor/types";
 
-function normalizeText(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
+const MAX_ATTEMPTS_PER_TOPIC = 3;
+
+// ─── Text helpers ──────────────────────────────────────────────────────────
+
+function normalizeText(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
 }
 
-function getWords(value: string) {
-  return normalizeText(value)
-    .split(/\s+/)
-    .map((word) => word.trim())
-    .filter(Boolean);
+function getWords(s: string) {
+  return normalizeText(s).split(/\s+/).filter(Boolean);
 }
 
-const unsafeContradictionPhrases = [
-  "do nothing",
-  "ignore",
-  "wait until later",
-  "skip hand hygiene",
-  "dont report",
-  "do not report",
-  "never report",
-  "share private",
-  "tell the family",
-  "reuse needle",
-  "skip documentation",
-  "give medication without checking",
-  "diagnose",
-  "prescribe",
+// ─── Grading ───────────────────────────────────────────────────────────────
+
+const UNSAFE_PHRASES = [
+  "do nothing", "ignore", "wait until later", "skip hand hygiene",
+  "dont report", "do not report", "never report", "share private",
+  "reuse needle", "skip documentation", "give medication without checking",
+  "diagnose", "prescribe",
 ];
 
-function includesNormalizedPhrase(value: string, phrase: string) {
-  return normalizeText(value).includes(normalizeText(phrase));
+function prefixMatch(a: string, b: string) {
+  return a === b || a.startsWith(b) || b.startsWith(a);
 }
 
-function keywordMatches(normalizedStudentMessage: string, keyword: string) {
-  const normalizedKeyword = normalizeText(keyword).trim();
-
-  if (!normalizedKeyword) {
-    return false;
-  }
-
-  const studentWords = getWords(normalizedStudentMessage);
-  const keywordWords = getWords(normalizedKeyword);
-
-  if (keywordWords.length <= 1) {
-    // Prefix match handles stems: "schedul" matches "scheduling", "scheduled", "schedule"
-    return studentWords.some(
-      (word) => word === normalizedKeyword || word.startsWith(normalizedKeyword),
-    );
-  }
-
-  return normalizedStudentMessage
-    .split(/\s+/)
-    .join(" ")
-    .includes(keywordWords.join(" "));
+// Fraction of meaningful ideal-answer words present in student answer (0–1)
+function semanticOverlap(studentText: string, idealAnswer: string): number {
+  const studentWords = getWords(studentText);
+  const idealWords = getWords(idealAnswer).filter((w) => w.length >= 4);
+  if (idealWords.length === 0) return 1;
+  const hits = idealWords.filter((iw) => studentWords.some((sw) => prefixMatch(sw, iw))).length;
+  return hits / idealWords.length;
 }
 
-function conceptMatchesStudentAnswer(
-  normalizedStudentMessage: string,
-  concept: LessonSegment["acceptableConcepts"][number],
-) {
-  const normalizedKeywords = concept.keywords
-    .map((keyword) => normalizeText(keyword).trim())
-    .filter(Boolean);
-  const phraseMatched = normalizedKeywords.some(
-    (keyword) => keyword.includes(" ") && keywordMatches(normalizedStudentMessage, keyword),
-  );
+function keywordConceptsMatch(studentText: string, segment: LessonSegment) {
+  const normalized = normalizeText(studentText);
+  const studentWords = getWords(normalized);
 
-  if (phraseMatched) {
-    return true;
-  }
+  const matched = segment.acceptableConcepts
+    .filter((concept) => {
+      const kws = concept.keywords.map((k) => normalizeText(k).trim()).filter(Boolean);
+      const phraseHit = kws.some((k) => k.includes(" ") && normalized.includes(k));
+      if (phraseHit) return true;
+      const tokenHits = kws.filter(
+        (k) => !k.includes(" ") && studentWords.some((sw) => prefixMatch(sw, k)),
+      ).length;
+      return tokenHits >= (kws.length <= 1 ? 1 : 2);
+    })
+    .map((c) => c.label);
 
-  const tokenHits = normalizedKeywords.filter(
-    (keyword) => !keyword.includes(" ") && keywordMatches(normalizedStudentMessage, keyword),
-  ).length;
-  const requiredTokenHits = normalizedKeywords.length <= 1 ? 1 : 2;
+  const missed = segment.acceptableConcepts
+    .map((c) => c.label)
+    .filter((l) => !matched.includes(l));
 
-  return tokenHits >= requiredTokenHits;
+  return { matched, missed, meetsThreshold: matched.length >= segment.passThreshold };
 }
 
-function hasUnsafeContradiction(segment: LessonSegment, studentMessage: string) {
-  const combinedSegmentText = normalizeText(
-    [
-      segment.concept,
-      segment.example,
-      segment.question,
-      segment.idealAnswer,
-      segment.correctExplanation,
-      segment.incorrectExplanation,
-    ].join(" "),
-  );
-  const safetyOrScopeQuestion =
-    /\b(report|notify|provider|physician|nurse|emergency|infection|hand hygiene|glove|ppe|standard precaution|hipaa|privacy|medication|six rights|specimen|ecg|ekg|clia|scope)\b/.test(
-      combinedSegmentText,
-    );
+function gradeAnswer(studentText: string, segment: LessonSegment): TutorEvaluation {
+  const unsafe = UNSAFE_PHRASES.some((p) => normalizeText(studentText).includes(normalizeText(p)));
 
-  if (!safetyOrScopeQuestion) {
-    return false;
+  if (unsafe) {
+    return {
+      correct: false,
+      matchedConcepts: [],
+      missedConcepts: segment.acceptableConcepts.map((c) => c.label),
+      score: 0,
+      idealAnswer: segment.idealAnswer,
+      correctExplanation: segment.correctExplanation,
+      incorrectExplanation: segment.incorrectExplanation,
+      memoryTip: segment.memoryTip,
+    };
   }
 
-  return unsafeContradictionPhrases.some((phrase) =>
-    includesNormalizedPhrase(studentMessage, phrase),
-  );
+  const { matched, missed, meetsThreshold } = keywordConceptsMatch(studentText, segment);
+  const overlap = semanticOverlap(studentText, segment.idealAnswer);
+
+  // Correct if keyword concepts pass OR semantic overlap >= 50% of ideal answer
+  const correct = meetsThreshold || overlap >= 0.5;
+  const score = Math.round(Math.max(
+    segment.acceptableConcepts.length > 0 ? matched.length / segment.acceptableConcepts.length : 0,
+    overlap,
+  ) * 100);
+
+  return {
+    correct,
+    matchedConcepts: matched,
+    missedConcepts: correct ? [] : missed,
+    score,
+    idealAnswer: segment.idealAnswer,
+    correctExplanation: segment.correctExplanation,
+    incorrectExplanation: segment.incorrectExplanation,
+    memoryTip: segment.memoryTip,
+  };
 }
 
-function isTooVagueForMastery(
-  segment: LessonSegment,
-  studentMessage: string,
-  matchedConcepts: string[],
-) {
-  const words = getWords(studentMessage);
+// ─── Session state ─────────────────────────────────────────────────────────
 
-  if (matchedConcepts.length < segment.passThreshold) {
-    return false;
-  }
-
-  if (segment.passThreshold > 1 && words.length <= 2) {
-    return true;
-  }
-
-  if (segment.questionType === "scenario" && words.length < 5) {
-    return true;
-  }
-
-  if (segment.questionType === "critical_thinking" && words.length < 6) {
-    return true;
-  }
-
-  return false;
-}
-
-function semanticMatchesIdealAnswer(studentMessage: string, idealAnswer: string): boolean {
-  const studentWords = getWords(normalizeText(studentMessage));
-  const idealWords = getWords(normalizeText(idealAnswer)).filter((w) => w.length >= 4);
-  if (idealWords.length === 0) return false;
-  const hits = idealWords.filter((idealWord) =>
-    studentWords.some(
-      (sw) => sw === idealWord || sw.startsWith(idealWord) || idealWord.startsWith(sw),
-    ),
-  ).length;
-  return hits / idealWords.length >= 0.5;
-}
-
-function tutorRevealedAnswer(lastTutorMessage: string | null, segment: LessonSegment): boolean {
-  if (!lastTutorMessage) return false;
-  return semanticMatchesIdealAnswer(lastTutorMessage, segment.idealAnswer);
-}
-
-function getCurrentSegment(lesson: TutorLesson, state: TutorSessionState) {
-  return lesson.segments[Math.min(state.currentSegmentIndex, lesson.segments.length - 1)];
-}
-
-function calculateMastery(correctCount: number, totalQuestions: number) {
-  if (totalQuestions === 0) {
-    return 0;
-  }
-
-  return Math.round((correctCount / totalQuestions) * 100);
-}
-
-function determineDifficultyTier(args: {
-  mode: TutorMode;
-  correctCount: number;
-  attemptsOnCurrentQuestion: number;
-}): TutorDifficultyTier {
-  if (args.mode === "rapid_review") {
-    return "challenge";
-  }
-
-  if (args.mode === "quiz") {
-    return args.attemptsOnCurrentQuestion > 0 ? "foundation" : "standard";
-  }
-
-  if (args.attemptsOnCurrentQuestion >= 2) {
-    return "foundation";
-  }
-
-  if (args.correctCount >= 2) {
-    return "challenge";
-  }
-
-  return "standard";
-}
-
-function getModeIntro(mode: TutorMode) {
-  if (mode === "quiz") {
-    return "We're doing a quick guided check today — I'll keep the teaching brief and get right to the question.";
-  }
-
-  if (mode === "rapid_review") {
-    return "We're moving fast today — short reminders, high-yield points, and quick questions to keep your recall sharp.";
-  }
-
-  if (mode === "weak_area_review") {
-    return "We're going to slow down and really nail this one — I'll keep coming back to it until it clicks.";
-  }
-
-  return "We'll work through this together step by step — I'll teach one idea, check that it landed, then we'll move on.";
+function topicsFromLesson(lesson: TutorLesson): TopicState[] {
+  return lesson.segments.map((seg) => ({
+    id: seg.id,
+    title: seg.title,
+    taught: false,
+    attempts: 0,
+    mastered: false,
+  }));
 }
 
 export function createInitialTutorSessionState(
@@ -217,35 +125,25 @@ export function createInitialTutorSessionState(
   preferredLanguage: SupportedLanguage = "en",
 ): TutorSessionState {
   const lesson = getTutorLesson(lessonId);
-
-  if (!lesson) {
-    throw new Error(`Unknown lesson id: ${lessonId}`);
-  }
-
+  if (!lesson) throw new Error(`Unknown lesson id: ${lessonId}`);
   const mode = resolveLessonMode(lesson, modeOverride);
 
   return {
     lessonId: lesson.id,
     mode,
     preferredLanguage,
-    currentSegmentIndex: 0,
-    step: "intro",
-    attemptsOnCurrentQuestion: 0,
-    remediationLevel: 0,
-    difficultyTier: determineDifficultyTier({
-      mode,
-      correctCount: 0,
-      attemptsOnCurrentQuestion: 0,
-    }),
+    topics: topicsFromLesson(lesson),
+    currentTopicIndex: 0,
+    currentTopicAttempts: 0,
+    awaitingAnswer: false,
+    tutorLastGaveAnswer: false,
     correctCount: 0,
-    totalQuestions: lesson.segments.length,
     masteryScore: 0,
-    lastStudentMessage: null,
-    lastTutorMessage: null,
-    lastMatchedConcepts: [],
     weakAreasSnapshot,
     sessionComplete: false,
-    struggledSegmentIds: [],
+    lastStudentMessage: null,
+    lastTutorMessage: null,
+    step: "intro",
   };
 }
 
@@ -253,394 +151,288 @@ export function parseTutorSessionState(
   input: unknown,
   lessonId?: string,
   modeOverride?: TutorMode,
-) {
+): TutorSessionState | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    if (!lessonId) {
-      return null;
-    }
-
-    return createInitialTutorSessionState(lessonId, modeOverride, [], "en");
+    return lessonId ? createInitialTutorSessionState(lessonId, modeOverride) : null;
   }
 
-  const raw = input as Partial<TutorSessionState>;
+  const raw = input as Record<string, unknown>;
 
   if (!raw.lessonId || !raw.mode) {
-    if (!lessonId) {
-      return null;
-    }
+    return lessonId ? createInitialTutorSessionState(lessonId, modeOverride) : null;
+  }
 
-    return createInitialTutorSessionState(lessonId, modeOverride, [], "en");
+  // Old-format state (no topics array) — rebuild from the lesson definition
+  if (!Array.isArray(raw.topics) || raw.topics.length === 0) {
+    if (!lessonId) return null;
+    const fresh = createInitialTutorSessionState(lessonId, modeOverride);
+    return {
+      ...fresh,
+      mode: modeOverride ?? (raw.mode as TutorMode),
+      preferredLanguage: (raw.preferredLanguage as SupportedLanguage) ?? "en",
+      weakAreasSnapshot: Array.isArray(raw.weakAreasSnapshot)
+        ? (raw.weakAreasSnapshot as string[])
+        : [],
+    };
   }
 
   return {
-    lessonId: raw.lessonId,
-    mode: modeOverride ?? raw.mode,
-    preferredLanguage: raw.preferredLanguage ?? "en",
-    currentSegmentIndex: raw.currentSegmentIndex ?? 0,
-    step: raw.step ?? "intro",
-    attemptsOnCurrentQuestion: raw.attemptsOnCurrentQuestion ?? 0,
-    remediationLevel: raw.remediationLevel ?? 0,
-    difficultyTier:
-      raw.difficultyTier ??
-      determineDifficultyTier({
-        mode: modeOverride ?? raw.mode,
-        correctCount: raw.correctCount ?? 0,
-        attemptsOnCurrentQuestion: raw.attemptsOnCurrentQuestion ?? 0,
-      }),
-    correctCount: raw.correctCount ?? 0,
-    totalQuestions: raw.totalQuestions ?? 0,
-    masteryScore: raw.masteryScore ?? 0,
-    lastStudentMessage: raw.lastStudentMessage ?? null,
-    lastTutorMessage: raw.lastTutorMessage ?? null,
-    lastMatchedConcepts: raw.lastMatchedConcepts ?? [],
-    weakAreasSnapshot: raw.weakAreasSnapshot ?? [],
-    sessionComplete: raw.sessionComplete ?? false,
-    struggledSegmentIds: raw.struggledSegmentIds ?? [],
-  } satisfies TutorSessionState;
+    lessonId: raw.lessonId as string,
+    mode: modeOverride ?? (raw.mode as TutorMode),
+    preferredLanguage: (raw.preferredLanguage as SupportedLanguage) ?? "en",
+    topics: raw.topics as TopicState[],
+    currentTopicIndex: (raw.currentTopicIndex as number) ?? 0,
+    currentTopicAttempts: (raw.currentTopicAttempts as number) ?? 0,
+    awaitingAnswer: (raw.awaitingAnswer as boolean) ?? false,
+    tutorLastGaveAnswer: (raw.tutorLastGaveAnswer as boolean) ?? false,
+    correctCount: (raw.correctCount as number) ?? 0,
+    masteryScore: (raw.masteryScore as number) ?? 0,
+    weakAreasSnapshot: Array.isArray(raw.weakAreasSnapshot)
+      ? (raw.weakAreasSnapshot as string[])
+      : [],
+    sessionComplete: (raw.sessionComplete as boolean) ?? false,
+    lastStudentMessage: (raw.lastStudentMessage as string | null) ?? null,
+    lastTutorMessage: (raw.lastTutorMessage as string | null) ?? null,
+    step: (raw.step as TutorSessionState["step"]) ?? "teach",
+  };
 }
 
-export function evaluateStudentAnswer(
-  segment: LessonSegment,
-  studentMessage: string,
-): TutorEvaluation {
-  const normalized = normalizeText(studentMessage);
+// ─── Message generation ────────────────────────────────────────────────────
 
-  const matchedConcepts = segment.acceptableConcepts
-    .filter((concept) => conceptMatchesStudentAnswer(normalized, concept))
-    .map((concept) => concept.label);
+type TurnAction = "intro" | "correct" | "incorrect" | "force_advance" | "wrap";
 
-  const missedConcepts = segment.acceptableConcepts
-    .map((concept) => concept.label)
-    .filter((label) => !matchedConcepts.includes(label));
+type MessageArgs = {
+  action: TurnAction;
+  lesson: TutorLesson;
+  currentSegment: LessonSegment;
+  nextSegment: LessonSegment | null;
+  topicNumber: number;
+  totalTopics: number;
+  attemptNumber: number; // 1-indexed attempt that just happened
+  evaluation: TutorEvaluation | null;
+  studentMessage: string | null;
+  masteredTitles: string[];
+  struggledTitles: string[];
+  state: TutorSessionState;
+};
 
-  const hasRequiredConcepts = matchedConcepts.length >= segment.passThreshold;
-  const unsafeContradiction = hasUnsafeContradiction(segment, studentMessage);
-  const tooVagueForMastery = isTooVagueForMastery(segment, studentMessage, matchedConcepts);
-  const correct = hasRequiredConcepts && !unsafeContradiction && !tooVagueForMastery;
-  const score = Math.min(
-    100,
-    Math.round((matchedConcepts.length / segment.acceptableConcepts.length) * 100),
+function buildPrompt(args: MessageArgs): string {
+  const {
+    action, lesson, currentSegment, nextSegment,
+    topicNumber, totalTopics, attemptNumber,
+    evaluation, studentMessage, masteredTitles, struggledTitles, state,
+  } = args;
+
+  const lines: string[] = [];
+
+  switch (action) {
+    case "intro":
+      lines.push(
+        `ACTION: Begin the lesson. Introduce "${lesson.title}" warmly in 1-2 sentences.`,
+        `TOPIC 1 OF ${totalTopics}: "${currentSegment.title}"`,
+        `CONCEPT TO TEACH: ${currentSegment.concept}`,
+        `EXAMPLE TO SHARE: ${currentSegment.example}`,
+        `REQUIRED CLOSING QUESTION — end your response with this question exactly:`,
+        `"${currentSegment.question}"`,
+      );
+      break;
+
+    case "correct":
+      if (nextSegment) {
+        lines.push(
+          `ACTION: Student answered correctly. Confirm it in one sentence using the explanation below.`,
+          `EXPLANATION: ${evaluation?.correctExplanation ?? currentSegment.correctExplanation}`,
+          `TRANSITION (say this out loud): "Good — now let's move on to topic ${topicNumber + 1} of ${totalTopics}: ${nextSegment.title}."`,
+          `NEXT CONCEPT: ${nextSegment.concept}`,
+          `NEXT EXAMPLE: ${nextSegment.example}`,
+          `REQUIRED CLOSING QUESTION — end your response with this question exactly:`,
+          `"${nextSegment.question}"`,
+        );
+      } else {
+        lines.push(
+          `ACTION: Student answered the final topic correctly. Lesson complete.`,
+          `EXPLANATION: ${evaluation?.correctExplanation ?? currentSegment.correctExplanation}`,
+          `Give a 2-3 sentence summary of the lesson.`,
+          masteredTitles.length > 0 ? `Topics mastered: ${masteredTitles.join(", ")}.` : "",
+          struggledTitles.length > 0
+            ? `Tell the student to revisit these before the NHA CCMA exam: ${struggledTitles.join(", ")}.`
+            : "Celebrate — they mastered every topic.",
+          `Do NOT ask another question. Prompt them to take the quiz or start the next lesson.`,
+        );
+      }
+      break;
+
+    case "incorrect":
+      if (attemptNumber === 1) {
+        lines.push(
+          `ACTION: Student answered incorrectly on attempt 1. Explain why, then ask again.`,
+          `TOPIC ${topicNumber} OF ${totalTopics}: "${currentSegment.title}"`,
+          `STUDENT SAID: "${studentMessage ?? ""}"`,
+          `WHY IT WAS WRONG: ${evaluation?.incorrectExplanation ?? currentSegment.incorrectExplanation}`,
+          `MEMORY TIP: ${currentSegment.memoryTip}`,
+          `REQUIRED CLOSING QUESTION — end with this question, rephrased slightly if needed:`,
+          `"${currentSegment.question}"`,
+        );
+      } else {
+        lines.push(
+          `ACTION: Student answered incorrectly on attempt ${attemptNumber}. State the answer directly, then ask one more time.`,
+          `TOPIC ${topicNumber} OF ${totalTopics}: "${currentSegment.title}"`,
+          `STUDENT SAID: "${studentMessage ?? ""}"`,
+          `STATE THIS ANSWER EXPLICITLY: "${currentSegment.idealAnswer}"`,
+          `MEMORY TIP: ${currentSegment.memoryTip}`,
+          `REQUIRED CLOSING QUESTION — end with this question one final time:`,
+          `"${currentSegment.question}"`,
+        );
+      }
+      break;
+
+    case "force_advance":
+      if (nextSegment) {
+        lines.push(
+          `ACTION: Student did not master topic ${topicNumber} after ${MAX_ATTEMPTS_PER_TOPIC} attempts. Give them the answer and move on.`,
+          `CORRECT ANSWER TO STATE: "${currentSegment.idealAnswer}"`,
+          `MEMORY TIP: ${currentSegment.memoryTip}`,
+          `TRANSITION (say this): "Let's keep moving — topic ${topicNumber + 1} of ${totalTopics}: ${nextSegment.title}."`,
+          `NEXT CONCEPT: ${nextSegment.concept}`,
+          `NEXT EXAMPLE: ${nextSegment.example}`,
+          `REQUIRED CLOSING QUESTION — end your response with this question exactly:`,
+          `"${nextSegment.question}"`,
+          `Tone: supportive and forward-looking. Do NOT say "correct" or "great job."`,
+        );
+      } else {
+        lines.push(
+          `ACTION: Student did not master the final topic after ${MAX_ATTEMPTS_PER_TOPIC} attempts. Give answer and summarize.`,
+          `CORRECT ANSWER TO STATE: "${currentSegment.idealAnswer}"`,
+          `MEMORY TIP: ${currentSegment.memoryTip}`,
+          `Give a brief lesson summary.`,
+          masteredTitles.length > 0 ? `Topics mastered: ${masteredTitles.join(", ")}.` : "",
+          `Topics to review before the NHA CCMA exam: ${[...struggledTitles, currentSegment.title].join(", ")}.`,
+          `Do NOT ask another question.`,
+        );
+      }
+      break;
+
+    case "wrap":
+      lines.push(
+        `ACTION: All topics complete. Give a lesson summary.`,
+        lesson.completionMessage,
+        masteredTitles.length > 0 ? `Topics mastered: ${masteredTitles.join(", ")}.` : "",
+        struggledTitles.length > 0
+          ? `Tell the student to revisit these before the NHA CCMA exam: ${struggledTitles.join(", ")}.`
+          : "All topics mastered — strong session.",
+        `Do NOT ask another question. Prompt them to take the quiz or start another lesson.`,
+      );
+      break;
+  }
+
+  lines.push(
+    `---`,
+    `LESSON: ${lesson.title}`,
+    `LESSON GOAL: ${lesson.learningGoal}`,
+    `TUTORING MODE: ${state.mode}`,
+    `LANGUAGE: ${state.preferredLanguage}`,
+    `Output: keep it under 200 words. Sound like a warm CCMA instructor. No bullet walls.`,
   );
 
-  return {
-    correct,
-    matchedConcepts,
-    missedConcepts: [
-      ...missedConcepts,
-      unsafeContradiction ? "safe CMA action" : null,
-      tooVagueForMastery ? "complete direct answer" : null,
-    ].filter((concept): concept is string => Boolean(concept)),
-    score,
-    idealAnswer: segment.idealAnswer,
-    correctExplanation: segment.correctExplanation,
-    incorrectExplanation: segment.incorrectExplanation,
-    memoryTip: segment.memoryTip,
-  };
+  return lines.filter(Boolean).join("\n");
 }
 
-const MAX_RETRIES_PER_SEGMENT = 3;
+function fallbackMessage(args: MessageArgs): string {
+  const { action, currentSegment, nextSegment, lesson, evaluation, topicNumber, totalTopics, masteredTitles, struggledTitles } = args;
 
-export function advanceTutorSessionState(
-  lesson: TutorLesson,
-  state: TutorSessionState,
-  studentMessage: string,
-  evaluation: TutorEvaluation,
-): { nextState: TutorSessionState; action: "advance" | "wrap" | "retry"; forcedAdvance: boolean } {
-  const baseState: TutorSessionState = {
-    ...state,
-    lastStudentMessage: studentMessage,
-    lastMatchedConcepts: evaluation.matchedConcepts,
-  };
-
-  if (evaluation.correct) {
-    const correctCount = state.correctCount + 1;
-    const nextSegmentIndex = state.currentSegmentIndex + 1;
-    const sessionComplete = nextSegmentIndex >= lesson.segments.length;
-    const attemptsOnCurrentQuestion = 0;
-
-    return {
-      nextState: {
-        ...baseState,
-        currentSegmentIndex: sessionComplete ? state.currentSegmentIndex : nextSegmentIndex,
-        step: sessionComplete ? "wrap" : "advance",
-        attemptsOnCurrentQuestion,
-        remediationLevel: 0,
-        difficultyTier: determineDifficultyTier({
-          mode: state.mode,
-          correctCount,
-          attemptsOnCurrentQuestion,
-        }),
-        correctCount,
-        masteryScore: calculateMastery(correctCount, state.totalQuestions),
-        sessionComplete,
-      } satisfies TutorSessionState,
-      action: sessionComplete ? "wrap" : "advance",
-      forcedAdvance: false,
-    };
-  }
-
-  const currentSegmentId = lesson.segments[state.currentSegmentIndex]?.id;
-  const struggledSegmentIds =
-    currentSegmentId && !state.struggledSegmentIds.includes(currentSegmentId)
-      ? [...state.struggledSegmentIds, currentSegmentId]
-      : state.struggledSegmentIds;
-
-  const newAttempts = state.attemptsOnCurrentQuestion + 1;
-
-  // After max retries, force-advance so the tutor never loops indefinitely on a single question.
-  if (newAttempts >= MAX_RETRIES_PER_SEGMENT) {
-    const nextSegmentIndex = state.currentSegmentIndex + 1;
-    const sessionComplete = nextSegmentIndex >= lesson.segments.length;
-
-    return {
-      nextState: {
-        ...baseState,
-        currentSegmentIndex: sessionComplete ? state.currentSegmentIndex : nextSegmentIndex,
-        step: sessionComplete ? "wrap" : "advance",
-        attemptsOnCurrentQuestion: 0,
-        remediationLevel: 0,
-        difficultyTier: determineDifficultyTier({
-          mode: state.mode,
-          correctCount: state.correctCount,
-          attemptsOnCurrentQuestion: 0,
-        }),
-        masteryScore: calculateMastery(state.correctCount, state.totalQuestions),
-        sessionComplete,
-        struggledSegmentIds,
-      } satisfies TutorSessionState,
-      action: sessionComplete ? "wrap" : "advance",
-      forcedAdvance: true,
-    };
-  }
-
-  return {
-    nextState: {
-      ...baseState,
-      step: "remediate",
-      attemptsOnCurrentQuestion: newAttempts,
-      remediationLevel: state.remediationLevel + 1,
-      difficultyTier: determineDifficultyTier({
-        mode: state.mode,
-        correctCount: state.correctCount,
-        attemptsOnCurrentQuestion: newAttempts,
-      }),
-      masteryScore: calculateMastery(state.correctCount, state.totalQuestions),
-      sessionComplete: false,
-      struggledSegmentIds,
-    } satisfies TutorSessionState,
-    action: "retry",
-    forcedAdvance: false,
-  };
-}
-
-function renderFallbackMessage(context: TutorMessageContext) {
-  const modePrefix = getModeIntro(context.state.mode);
-
-  if (context.action === "intro") {
-    if (context.state.mode === "quiz") {
+  switch (action) {
+    case "intro":
       return [
-        `Alright, let's check your knowledge on ${context.lesson.title}.`,
-        modePrefix,
-        `Here's a quick reminder before we dive in: ${context.segment.concept}`,
-        context.segment.question,
+        `Today we're covering ${lesson.title}.`,
+        currentSegment.concept,
+        `Example: ${currentSegment.example}`,
+        currentSegment.question,
       ].join("\n\n");
-    }
 
-    return [
-      `Okay, today we're tackling ${context.lesson.title}.`,
-      modePrefix,
-      context.segment.concept,
-      `Here's a real-world example: ${context.segment.example}`,
-      context.segment.question,
-    ].join("\n\n");
+    case "correct":
+      if (!nextSegment) {
+        return [
+          evaluation?.correctExplanation ?? "Great work!",
+          lesson.completionMessage,
+          struggledTitles.length > 0
+            ? `Review before your exam: ${struggledTitles.join(", ")}.`
+            : "You showed strong understanding throughout.",
+        ].join("\n\n");
+      }
+      return [
+        evaluation?.correctExplanation ?? "That's right.",
+        `Moving on — topic ${topicNumber + 1} of ${totalTopics}: ${nextSegment.title}.`,
+        nextSegment.concept,
+        nextSegment.question,
+      ].join("\n\n");
+
+    case "incorrect":
+      return [
+        evaluation?.incorrectExplanation ?? "Not quite — let's work through it.",
+        args.attemptNumber >= 2 ? `The answer is: ${currentSegment.idealAnswer}` : null,
+        `Memory tip: ${currentSegment.memoryTip}`,
+        currentSegment.question,
+      ].filter(Boolean).join("\n\n");
+
+    case "force_advance":
+      if (!nextSegment) {
+        return [
+          `The answer: ${currentSegment.idealAnswer}`,
+          `Memory tip: ${currentSegment.memoryTip}`,
+          lesson.completionMessage,
+          struggledTitles.length > 0 ? `Review before your exam: ${[...struggledTitles, currentSegment.title].join(", ")}.` : "",
+        ].filter(Boolean).join("\n\n");
+      }
+      return [
+        `The answer: ${currentSegment.idealAnswer}`,
+        `Memory tip: ${currentSegment.memoryTip}`,
+        `Moving on — topic ${topicNumber + 1} of ${totalTopics}: ${nextSegment.title}.`,
+        nextSegment.concept,
+        nextSegment.question,
+      ].join("\n\n");
+
+    case "wrap":
+      return [
+        lesson.completionMessage,
+        struggledTitles.length > 0
+          ? `Review before your exam: ${struggledTitles.join(", ")}.`
+          : "Great session — solid understanding throughout.",
+      ].join("\n\n");
   }
-
-  if (context.action === "advance") {
-    const nextSegment = context.segment;
-
-    return [
-      context.evaluation?.correctExplanation ?? "Yep, that's it!",
-      context.state.mode === "quiz"
-        ? `Good — let's keep going. Next up: ${nextSegment.title}.`
-        : `Nice. Let's build on that — next idea: ${nextSegment.title}.`,
-      context.state.mode === "quiz" ? `Keep this in mind: ${nextSegment.concept}` : nextSegment.concept,
-      context.state.mode === "rapid_review" ? null : `Example: ${nextSegment.example}`,
-      nextSegment.question,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }
-
-  if (context.action === "retry") {
-    return [
-      context.evaluation?.incorrectExplanation ??
-        "Not quite — but that's okay, let's work through it.",
-      context.evaluation?.missedConcepts.length
-        ? `What was missing: ${context.evaluation.missedConcepts.join(", ")}.`
-        : null,
-      context.state.remediationLevel > 1
-        ? `Let's slow it down. The key thing to remember here: ${context.evaluation?.idealAnswer}`
-        : null,
-      `Memory tip: ${context.evaluation?.memoryTip ?? context.segment.memoryTip}`,
-      `Give it another shot: ${context.segment.question}`,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }
-
-  const struggledTitles = context.state.struggledSegmentIds
-    .map((id) => context.lesson.segments.find((s) => s.id === id)?.title)
-    .filter(Boolean);
-
-  return [
-    context.lesson.completionMessage,
-    struggledTitles.length > 0
-      ? `You did well overall, but make sure to revisit these before the NHA CCMA exam: ${struggledTitles.join(", ")}.`
-      : `You showed strong understanding throughout — great work on ${context.lesson.title}.`,
-    `Key takeaway: ${context.segment.idealAnswer}`,
-  ].join("\n\n");
 }
 
-async function generateModelMessage(context: TutorMessageContext) {
+async function generateMessage(args: MessageArgs): Promise<string> {
   const client = getOpenAIClient();
 
-  if (!client) {
-    return null;
-  }
-
-  const segmentNumber = context.state.currentSegmentIndex + 1;
-  const totalSegments = context.lesson.segments.length;
-
-  const prompt = [
-    `Lesson title: ${context.lesson.title}`,
-    `Lesson goal: ${context.lesson.learningGoal}`,
-    `Lesson progress: topic ${segmentNumber} of ${totalSegments} — "${context.segment.title}"`,
-    `Current segment concept: ${context.segment.concept}`,
-    `Current segment example: ${context.segment.example}`,
-    `Checkpoint question for this topic: ${context.segment.question}`,
-    context.segment.questionType ? `Question type: ${context.segment.questionType}` : null,
-    context.segment.difficulty ? `Question difficulty: ${context.segment.difficulty}` : null,
-    `Action: ${context.action}`,
-    `Tutoring mode: ${context.state.mode}`,
-    `Preferred teaching language: ${context.state.preferredLanguage}`,
-    `Difficulty tier: ${context.state.difficultyTier}`,
-    `Remediation level: ${context.state.remediationLevel}`,
-    `Session step: ${context.state.step}`,
-    context.state.weakAreasSnapshot.length
-      ? `Weak areas snapshot: ${context.state.weakAreasSnapshot.join(", ")}`
-      : null,
-    context.studentMessage ? `Student answer: ${context.studentMessage}` : null,
-    context.evaluation
-      ? `Evaluation summary: correct=${context.evaluation.correct}; matched=${context.evaluation.matchedConcepts.join(
-          ", ",
-        )}; missed=${context.evaluation.missedConcepts.join(", ")}`
-      : null,
-    context.evaluation ? `Ideal answer: ${context.evaluation.idealAnswer}` : null,
-    context.evaluation
-      ? `Use this memory tip if needed: ${context.evaluation.memoryTip}`
-      : `Ask the checkpoint question at the end.`,
-    context.action === "retry" && context.state.remediationLevel === 1
-      ? `Retry approach (attempt 2): The same explanation did not land. Switch your approach entirely — try a clinical analogy, a "what would you do in the clinic?" scenario, or break the concept into a smaller piece. Ask the same underlying question but phrase it differently.`
-      : null,
-    context.action === "retry" && context.state.remediationLevel >= 2
-      ? `Retry approach (attempt ${context.state.remediationLevel + 1}): Multiple attempts have not produced mastery. State the correct answer directly and explicitly in one sentence. Do not re-explain the concept the same way again. Then ask the question one final time using a different framing.`
-      : null,
-    context.action === "retry" && context.state.remediationLevel === 0
-      ? `Mastery rule: do not advance. Explain precisely why the answer was incomplete or inaccurate, name the missed concept, reteach briefly, and ask the same question or a close follow-up.`
-      : null,
-    context.forcedAdvance
-      ? `Forced advance: The learner did not reach mastery on "${context.segment.title}" after ${MAX_RETRIES_PER_SEGMENT} attempts. Do NOT say "correct" or "great job." Instead: acknowledge directly that this concept was tricky ("This one's tough — let's make sure you have it before the exam."), state the correct answer in one clear sentence, share the memory tip, then transition forward with something like "Let's keep moving — next up is: [next segment title]." Keep the tone supportive and forward-looking.`
-      : null,
-    context.action === "wrap"
-      ? (() => {
-          const struggledTitles = context.state.struggledSegmentIds
-            .map((id) => context.lesson.segments.find((s) => s.id === id)?.title)
-            .filter(Boolean);
-          if (struggledTitles.length > 0) {
-            return `Summary rule: the student completed the lesson but struggled on some concepts. Give a brief overview of what was covered in "${context.lesson.title}", then explicitly name these topics they should revisit before the NHA CCMA exam: ${struggledTitles.join(", ")}. Be encouraging but direct — tell them which specific areas to keep working on.`;
-          }
-          return `Summary rule: the student demonstrated solid understanding throughout "${context.lesson.title}". Give a positive recap of the key concepts covered. Celebrate their progress. Keep it concise and motivating.`;
-        })()
-      : null,
-    context.state.mode === "quiz"
-      ? `Mode rules: keep teaching minimal, ask the checkpoint quickly, and frame feedback like a guided exam coach.`
-      : null,
-    context.state.mode === "rapid_review"
-      ? `Mode rules: keep it brisk, high-yield, and exam-focused.`
-      : null,
-    context.state.mode === "weak_area_review"
-      ? `Mode rules: reinforce the weak idea with patient, repetitive coaching and a simple memory anchor.`
-      : null,
-    context.action === "advance" && !context.state.sessionComplete
-      ? `Transition instruction: The student answered the previous topic correctly. Briefly acknowledge it (1 sentence), then say "Now let's move on to topic ${segmentNumber} of ${totalSegments}: ${context.segment.title}." Introduce the new concept, then close with the checkpoint question below.`
-      : null,
-    context.action !== "wrap"
-      ? `Required closing question — you MUST end your response with this question, word for word or a minimal natural rephrasing: "${context.segment.question}". Do not substitute a different question. The grader evaluates against this exact concept.`
-      : null,
-    context.action === "wrap"
-      ? `Output rules: keep it under 200 words, sound like a supportive CCMA instructor, recap the lesson, celebrate progress, and do not end with a question.`
-      : `Output rules: keep it under 180 words, sound like a supportive CCMA instructor, evaluate strictly, and end with the required checkpoint question above.`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const response = await client.responses.create({
-    model: DEFAULT_TUTOR_MODEL,
-    instructions: buildTutorSystemPrompt({
-      mode: context.state.mode,
-      topic: context.lesson.title,
-      weakAreas: [],
-      preferredLanguage: context.state.preferredLanguage,
-    }),
-    input: prompt,
-    store: false,
-    max_output_tokens: 360,
-  });
-
-  return response.output_text.trim();
-}
-
-export async function generateTutorMessage(context: TutorMessageContext) {
-  try {
-    const modelMessage = await generateModelMessage(context);
-
-    if (modelMessage) {
-      return modelMessage;
+  if (client) {
+    try {
+      const response = await client.responses.create({
+        model: DEFAULT_TUTOR_MODEL,
+        instructions: buildTutorSystemPrompt({
+          mode: args.state.mode,
+          topic: args.lesson.title,
+          weakAreas: args.state.weakAreasSnapshot,
+          preferredLanguage: args.state.preferredLanguage,
+        }),
+        input: buildPrompt(args),
+        store: false,
+        max_output_tokens: 320,
+      });
+      const text = response.output_text?.trim();
+      if (text) return text;
+    } catch {
+      // Fall through to deterministic fallback
     }
-  } catch {
-    // Fall through to deterministic messaging so the study flow still works.
   }
 
-  return renderFallbackMessage(context);
+  return fallbackMessage(args);
 }
 
-export async function buildInitialTutorTurn(lessonId: string) {
-  const lesson = getTutorLesson(lessonId);
+// ─── Public API ────────────────────────────────────────────────────────────
 
-  if (!lesson) {
-    throw new Error(`Unknown lesson id: ${lessonId}`);
-  }
-
-  const state = createInitialTutorSessionState(lessonId);
-  const segment = getCurrentSegment(lesson, state);
-  const message = await generateTutorMessage({
-    action: "intro",
-    lesson,
-    segment,
-    state,
-    evaluation: null,
-    studentMessage: null,
-  });
-
-  return {
-    lesson,
-    state: {
-      ...state,
-      step: "teach",
-      lastTutorMessage: message,
-    } satisfies TutorSessionState,
-    message,
-  };
+// Kept for backward compat with progress.ts and any callers
+export function evaluateStudentAnswer(segment: LessonSegment, studentMessage: string): TutorEvaluation {
+  return gradeAnswer(studentMessage, segment);
 }
 
 export async function buildInitialTutorTurnForMode(args: {
@@ -650,10 +442,7 @@ export async function buildInitialTutorTurnForMode(args: {
   preferredLanguage?: SupportedLanguage;
 }) {
   const lesson = getTutorLesson(args.lessonId);
-
-  if (!lesson) {
-    throw new Error(`Unknown lesson id: ${args.lessonId}`);
-  }
+  if (!lesson) throw new Error(`Unknown lesson id: ${args.lessonId}`);
 
   const state = createInitialTutorSessionState(
     args.lessonId,
@@ -661,25 +450,39 @@ export async function buildInitialTutorTurnForMode(args: {
     args.weakAreasSnapshot ?? [],
     args.preferredLanguage ?? "en",
   );
-  const segment = getCurrentSegment(lesson, state);
-  const message = await generateTutorMessage({
+
+  const currentSegment = lesson.segments[0];
+  if (!currentSegment) throw new Error(`Lesson has no segments: ${args.lessonId}`);
+
+  const message = await generateMessage({
     action: "intro",
     lesson,
-    segment,
-    state,
+    currentSegment,
+    nextSegment: lesson.segments[1] ?? null,
+    topicNumber: 1,
+    totalTopics: lesson.segments.length,
+    attemptNumber: 0,
     evaluation: null,
     studentMessage: null,
+    masteredTitles: [],
+    struggledTitles: [],
+    state,
   });
 
   return {
     lesson,
     state: {
       ...state,
-      step: "teach",
+      step: "teach" as const,
+      awaitingAnswer: true,
       lastTutorMessage: message,
-    } satisfies TutorSessionState,
+    },
     message,
   };
+}
+
+export async function buildInitialTutorTurn(lessonId: string) {
+  return buildInitialTutorTurnForMode({ lessonId });
 }
 
 export async function processTutorReply(args: {
@@ -688,54 +491,119 @@ export async function processTutorReply(args: {
   studentMessage: string;
 }) {
   const lesson = getTutorLesson(args.lessonId);
+  if (!lesson) throw new Error(`Unknown lesson id: ${args.lessonId}`);
 
-  if (!lesson) {
-    throw new Error(`Unknown lesson id: ${args.lessonId}`);
+  const { state, studentMessage } = args;
+  const topicIndex = state.currentTopicIndex;
+  const currentSegment = lesson.segments[topicIndex];
+  const totalTopics = lesson.segments.length;
+
+  if (!currentSegment) throw new Error(`Invalid topic index: ${topicIndex}`);
+
+  // ── 1. Grade ─────────────────────────────────────────────────────────────
+
+  let evaluation: TutorEvaluation;
+
+  if (state.tutorLastGaveAnswer) {
+    // Tutor stated the answer last turn — auto-credit any restatement
+    evaluation = {
+      correct: true,
+      matchedConcepts: currentSegment.acceptableConcepts.map((c) => c.label),
+      missedConcepts: [],
+      score: 100,
+      idealAnswer: currentSegment.idealAnswer,
+      correctExplanation: currentSegment.correctExplanation,
+      incorrectExplanation: currentSegment.incorrectExplanation,
+      memoryTip: currentSegment.memoryTip,
+    };
+  } else {
+    evaluation = gradeAnswer(studentMessage, currentSegment);
   }
 
-  const currentSegment = getCurrentSegment(lesson, args.state);
-  const rawEvaluation = evaluateStudentAnswer(currentSegment, args.studentMessage);
+  const correct = evaluation.correct;
 
-  // If the tutor stated the answer in the previous turn (by prompt rule at remediationLevel >= 2,
-  // or because the tutor message itself overlapped with the ideal answer), credit the student
-  // for restating it rather than marking it wrong again.
-  const tutorGaveAnswer =
-    args.state.remediationLevel >= 2 ||
-    tutorRevealedAnswer(args.state.lastTutorMessage, currentSegment);
+  // ── 2. Decide progression ─────────────────────────────────────────────────
 
-  const evaluation =
-    !rawEvaluation.correct &&
-    tutorGaveAnswer &&
-    semanticMatchesIdealAnswer(args.studentMessage, currentSegment.idealAnswer)
-      ? { ...rawEvaluation, correct: true }
-      : rawEvaluation;
+  const newAttempts = state.currentTopicAttempts + 1;
+  const forceAdvance = !correct && newAttempts >= MAX_ATTEMPTS_PER_TOPIC;
+  const advance = correct || forceAdvance;
 
-  const transition = advanceTutorSessionState(lesson, args.state, args.studentMessage, evaluation);
+  // ── 3. Update topic list ──────────────────────────────────────────────────
 
-  const messageSegment =
-    transition.action === "advance" && !transition.nextState.sessionComplete
-      ? getCurrentSegment(lesson, transition.nextState)
-      : currentSegment;
+  const updatedTopics = state.topics.map((t, i) =>
+    i === topicIndex
+      ? { ...t, attempts: newAttempts, mastered: correct, taught: advance || t.taught }
+      : t,
+  );
 
-  const message = await generateTutorMessage({
-    action: transition.action,
+  const nextTopicIndex = advance ? topicIndex + 1 : topicIndex;
+  const sessionComplete = nextTopicIndex >= totalTopics;
+  const nextTopicAttempts = advance ? 0 : newAttempts;
+
+  const masteredTitles = updatedTopics.filter((t) => t.mastered).map((t) => t.title);
+  const struggledTitles = updatedTopics.filter((t) => t.taught && !t.mastered).map((t) => t.title);
+
+  // ── 4. Determine action for message generation ────────────────────────────
+
+  let action: TurnAction;
+  let step: TutorSessionState["step"];
+
+  if (sessionComplete) {
+    action = forceAdvance ? "force_advance" : "correct";
+    step = "completed";
+  } else if (advance) {
+    action = forceAdvance ? "force_advance" : "correct";
+    step = "advance";
+  } else {
+    action = "incorrect";
+    step = "remediate";
+  }
+
+  const nextSegment = sessionComplete ? null : lesson.segments[nextTopicIndex];
+
+  // ── 5. Generate message ───────────────────────────────────────────────────
+
+  const message = await generateMessage({
+    action,
     lesson,
-    segment: messageSegment,
-    state: transition.nextState,
+    currentSegment,
+    nextSegment,
+    topicNumber: topicIndex + 1,
+    totalTopics,
+    attemptNumber: newAttempts,
     evaluation,
-    studentMessage: args.studentMessage,
-    forcedAdvance: transition.forcedAdvance,
+    studentMessage,
+    masteredTitles,
+    struggledTitles,
+    state: { ...state, currentTopicAttempts: newAttempts },
   });
 
-  const completedState: TutorSessionState =
-    transition.action === "wrap"
-      ? { ...transition.nextState, step: "completed" }
-      : transition.nextState;
+  // ── 6. Build next state ───────────────────────────────────────────────────
 
-  return {
-    lesson,
-    evaluation,
-    nextState: { ...completedState, lastTutorMessage: message },
-    message,
+  const correctCount = state.correctCount + (correct ? 1 : 0);
+  const masteryScore = Math.round((masteredTitles.length / totalTopics) * 100);
+
+  // tutorLastGaveAnswer = true when we stay on the same topic and just stated the answer
+  // (either attempt 2+ incorrect, or the model overlapped with ideal answer in its message)
+  const tutorLastGaveAnswer =
+    !advance &&
+    (newAttempts >= 2 ||
+      semanticOverlap(message, currentSegment.idealAnswer) >= 0.5);
+
+  const nextState: TutorSessionState = {
+    ...state,
+    topics: updatedTopics,
+    currentTopicIndex: nextTopicIndex,
+    currentTopicAttempts: nextTopicAttempts,
+    awaitingAnswer: !sessionComplete,
+    tutorLastGaveAnswer,
+    correctCount,
+    masteryScore,
+    sessionComplete,
+    lastStudentMessage: studentMessage,
+    lastTutorMessage: message,
+    step,
   };
+
+  return { lesson, evaluation, nextState, message };
 }
