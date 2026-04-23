@@ -93,5 +93,6 @@ export type TutorMessageContext = {
   state: TutorSessionState;
   evaluation: TutorEvaluation | null;
   studentMessage: string | null;
+  forcedAdvance?: boolean;
 };
 

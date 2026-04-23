@@ -314,12 +314,14 @@ export function evaluateStudentAnswer(
   };
 }
 
+const MAX_RETRIES_PER_SEGMENT = 3;
+
 export function advanceTutorSessionState(
   lesson: TutorLesson,
   state: TutorSessionState,
   studentMessage: string,
   evaluation: TutorEvaluation,
-) {
+): { nextState: TutorSessionState; action: "advance" | "wrap" | "retry"; forcedAdvance: boolean } {
   const baseState: TutorSessionState = {
     ...state,
     lastStudentMessage: studentMessage,
@@ -349,25 +351,54 @@ export function advanceTutorSessionState(
         sessionComplete,
       } satisfies TutorSessionState,
       action: sessionComplete ? "wrap" : "advance",
-    } as const;
+      forcedAdvance: false,
+    };
+  }
+
+  const newAttempts = state.attemptsOnCurrentQuestion + 1;
+
+  // After max retries, force-advance so the tutor never loops indefinitely on a single question.
+  if (newAttempts >= MAX_RETRIES_PER_SEGMENT) {
+    const nextSegmentIndex = state.currentSegmentIndex + 1;
+    const sessionComplete = nextSegmentIndex >= lesson.segments.length;
+
+    return {
+      nextState: {
+        ...baseState,
+        currentSegmentIndex: sessionComplete ? state.currentSegmentIndex : nextSegmentIndex,
+        step: sessionComplete ? "wrap" : "advance",
+        attemptsOnCurrentQuestion: 0,
+        remediationLevel: 0,
+        difficultyTier: determineDifficultyTier({
+          mode: state.mode,
+          correctCount: state.correctCount,
+          attemptsOnCurrentQuestion: 0,
+        }),
+        masteryScore: calculateMastery(state.correctCount, state.totalQuestions),
+        sessionComplete,
+      } satisfies TutorSessionState,
+      action: sessionComplete ? "wrap" : "advance",
+      forcedAdvance: true,
+    };
   }
 
   return {
     nextState: {
       ...baseState,
       step: "remediate",
-      attemptsOnCurrentQuestion: state.attemptsOnCurrentQuestion + 1,
+      attemptsOnCurrentQuestion: newAttempts,
       remediationLevel: state.remediationLevel + 1,
       difficultyTier: determineDifficultyTier({
         mode: state.mode,
         correctCount: state.correctCount,
-        attemptsOnCurrentQuestion: state.attemptsOnCurrentQuestion + 1,
+        attemptsOnCurrentQuestion: newAttempts,
       }),
       masteryScore: calculateMastery(state.correctCount, state.totalQuestions),
       sessionComplete: false,
     } satisfies TutorSessionState,
     action: "retry",
-  } as const;
+    forcedAdvance: false,
+  };
 }
 
 function renderFallbackMessage(context: TutorMessageContext) {
@@ -467,8 +498,17 @@ async function generateModelMessage(context: TutorMessageContext) {
     context.evaluation
       ? `Use this memory tip if needed: ${context.evaluation.memoryTip}`
       : `Ask the checkpoint question at the end.`,
-    context.action === "retry"
+    context.action === "retry" && context.state.remediationLevel === 0
       ? `Mastery rule: do not advance. Explain precisely why the answer was incomplete or inaccurate, name the missed concept, reteach briefly, and ask the same question or a close follow-up.`
+      : null,
+    context.action === "retry" && context.state.remediationLevel === 1
+      ? `Retry approach (attempt 2): The same explanation did not land. Switch your approach entirely — try a clinical analogy, a real-world CNA scenario, or break the concept into a smaller piece. Ask the same underlying question but phrase it differently.`
+      : null,
+    context.action === "retry" && context.state.remediationLevel >= 2
+      ? `Retry approach (attempt ${context.state.remediationLevel + 1}): Multiple attempts have not produced mastery. State the correct answer directly and explicitly in one sentence. Do not re-explain the concept the same way again. Then ask the question one final time using a different framing.`
+      : null,
+    context.forcedAdvance
+      ? `Forced advance: The learner did not reach mastery on "${context.segment.title}" after ${MAX_RETRIES_PER_SEGMENT} attempts. Do NOT say "correct" or "great job." Instead: acknowledge directly that this concept was tricky ("This one's tricky — here's what to remember for the exam."), state the correct answer in one clear sentence, share the memory tip, then transition forward with something like "Let's keep moving — next up is: [next segment title]." Keep the tone supportive and forward-looking.`
       : null,
     context.action === "wrap"
       ? `Summary rule: close with concise key takeaways the student should remember for the Texas CNA exam.`
@@ -617,6 +657,7 @@ export async function processTutorReply(args: {
     state: transition.nextState,
     evaluation,
     studentMessage: args.studentMessage,
+    forcedAdvance: transition.forcedAdvance,
   });
 
   return {
