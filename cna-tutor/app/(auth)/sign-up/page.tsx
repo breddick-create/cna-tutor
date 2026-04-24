@@ -109,16 +109,16 @@ export default async function SignUpPage({
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium" htmlFor="email">
-            Email
+          <label className="mb-2 block text-sm font-medium" htmlFor="username">
+            Username
           </label>
           <input
             className="input-base"
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="jamie@example.com"
+            id="username"
+            name="username"
+            type="text"
+            autoComplete="username"
+            placeholder="jmartinez"
             required
           />
         </div>

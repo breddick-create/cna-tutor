@@ -4,10 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { isValidStaffAccessToken } from "@/lib/auth/staff-access";
-import {
-  ensureProfileForUser,
-  resolveProductFromMetadata,
-} from "@/lib/auth/session";
+import { ensureProfileForUser } from "@/lib/auth/session";
 import {
   getProductAdminPath,
   getStudentAuthRedirectPathForProduct,
@@ -46,12 +43,12 @@ function buildStaffSetupRedirect(message: string, inviteToken?: string) {
 }
 
 function getFriendlySignInMessage() {
-  return "We couldn't sign you in. Check your email and password, then try again.";
+  return "We couldn't sign you in. Check your username and password, then try again.";
 }
 
 function getFriendlySignUpMessage(message: string) {
   if (message.toLowerCase().includes("already")) {
-    return "That email is already in use. Try signing in instead.";
+    return "That username is already taken. Try a different one.";
   }
 
   return "We couldn't create your account. Check your information and try again.";
@@ -70,20 +67,31 @@ function getFriendlyStaffSetupMessage(message: string) {
 }
 
 export async function signInAction(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const username = String(formData.get("username") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const productValue = formData.get("product");
   const selectedProduct = isProductTrack(productValue) ? productValue : null;
 
-  if (!email || !password) {
-    redirect(buildRedirect("/sign-in", "Enter your email and password."));
+  if (!username || !password) {
+    redirect(buildRedirect("/sign-in", "Enter your username and password."));
+  }
+
+  const admin = createAdminClient();
+  const { data: profileData } = await admin
+    .from("profiles")
+    .select("email")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (!profileData?.email) {
+    redirect(buildRedirect("/sign-in", getFriendlySignInMessage()));
   }
 
   const supabase = await createClient();
   const {
     data: { user },
     error,
-  } = await supabase.auth.signInWithPassword({ email, password });
+  } = await supabase.auth.signInWithPassword({ email: profileData.email, password });
 
   if (error) {
     redirect(buildRedirect("/sign-in", getFriendlySignInMessage()));
@@ -143,36 +151,52 @@ export async function signInAction(formData: FormData) {
 }
 
 export async function signUpAction(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const username = String(formData.get("username") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("full_name") ?? "").trim();
   const cohort = String(formData.get("cohort") ?? "").trim();
   const preferredLanguage = resolvePreferredLanguage(formData.get("preferred_language"));
   const productValue = formData.get("product");
   const product = resolveProductTrack(productValue);
-  const headerStore = await headers();
-  const appUrl = resolveAppUrl(headerStore);
 
-  if (!email || !password || !fullName) {
-    redirect(buildRedirect("/sign-up", "Enter your name, email, and password to create your account."));
+  if (!username || !password || !fullName) {
+    redirect(buildRedirect("/sign-up", "Enter your name, username, and password to create your account."));
   }
 
-  const supabase = await createClient();
-  const {
-    data: signUpData,
-    error,
-  } = await supabase.auth.signUp({
-    email,
+  if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+    redirect(
+      buildRedirect(
+        "/sign-up",
+        "Username must be 3–30 characters and may only contain letters, numbers, dots, hyphens, and underscores.",
+      ),
+    );
+  }
+
+  const admin = createAdminClient();
+
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (existing) {
+    redirect(buildRedirect("/sign-up", "That username is already taken. Try a different one."));
+  }
+
+  const syntheticEmail = `${username}@hcci.internal`;
+
+  const { data: signUpData, error } = await admin.auth.admin.createUser({
+    email: syntheticEmail,
     password,
-    options: {
-      emailRedirectTo: `${appUrl}/auth/callback`,
-      data: {
-        full_name: fullName,
-        cohort,
-        preferred_language: preferredLanguage,
-        role: "student",
-        product,
-      },
+    email_confirm: true,
+    user_metadata: {
+      full_name: fullName,
+      username,
+      cohort,
+      preferred_language: preferredLanguage,
+      role: "student",
+      product,
     },
   });
 
@@ -181,14 +205,14 @@ export async function signUpAction(formData: FormData) {
   }
 
   if (signUpData.user) {
-    await ensureProfileForUser(signUpData.user, supabase, { product });
-    const admin = createAdminClient();
+    await ensureProfileForUser(signUpData.user, undefined, { product });
     const { error: profileUpdateError } = await admin
       .from("profiles")
       .update({
         product,
         cohort: cohort || null,
         preferred_language: preferredLanguage,
+        username,
       })
       .eq("id", signUpData.user.id);
 
@@ -198,20 +222,10 @@ export async function signUpAction(formData: FormData) {
         .update({
           product,
           cohort: cohort || null,
+          username,
         })
         .eq("id", signUpData.user.id);
     }
-
-  }
-
-  if (signUpData.session && signUpData.user) {
-    redirect(
-      await getStudentAuthRedirectPathForProduct({
-        product: resolveProductFromMetadata(signUpData.user.user_metadata?.product),
-        user: signUpData.user,
-        userId: signUpData.user.id,
-      }),
-    );
   }
 
   redirect(

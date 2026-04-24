@@ -238,6 +238,7 @@ export type Database = {
           product: "cna" | "ccma";
           full_name: string;
           email: string;
+          username: string;
           cohort: string | null;
           preferred_language: string;
           study_goal_hours: number;
@@ -249,9 +250,10 @@ export type Database = {
         Insert: {
           id: string;
           role?: "student" | "admin";
-          product?: "cna" | "ccma" | "rda";
+          product?: "cna" | "ccma";
           full_name: string;
           email: string;
+          username?: string;
           cohort?: string | null;
           preferred_language?: string;
           study_goal_hours?: number;
@@ -263,9 +265,10 @@ export type Database = {
         Update: {
           id?: string;
           role?: "student" | "admin";
-          product?: "cna" | "ccma" | "rda";
+          product?: "cna" | "ccma";
           full_name?: string;
           email?: string;
+          username?: string;
           cohort?: string | null;
           preferred_language?: string;
           study_goal_hours?: number;

@@ -74,16 +74,16 @@ export default async function SignInPage({
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium" htmlFor="email">
-            Email
+          <label className="mb-2 block text-sm font-medium" htmlFor="username">
+            Username
           </label>
           <input
             className="input-base"
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="name@example.com"
+            id="username"
+            name="username"
+            type="text"
+            autoComplete="username"
+            placeholder="Enter your username"
             required
           />
         </div>
