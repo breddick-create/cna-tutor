@@ -15,6 +15,7 @@ import {
 import { getStudentProgressionSnapshot } from "@/lib/ccma/progression/student";
 import { createClient } from "@/lib/supabase/server";
 import { buildInitialTutorTurnForMode } from "@/lib/ccma/tutor/orchestrator";
+import { getTutorLesson } from "@/lib/ccma/tutor/lessons";
 import type { TutorMode } from "@/lib/ccma/tutor/types";
 import { resolvePreferredLanguage } from "@/lib/ccma/i18n/languages";
 
@@ -96,11 +97,19 @@ export async function POST(request: Request) {
     );
   }
 
+  // Find the most recently completed session's lesson for "where you left off" recap
+  const lastCompleted = (studySessions ?? [])
+    .filter((s: { status: string }) => s.status === "completed")
+    .at(-1);
+  const priorLessonId = (lastCompleted?.session_state_json as Record<string, unknown> | null)?.lessonId as string | null ?? null;
+  const priorLessonTitle = priorLessonId ? (getTutorLesson(priorLessonId)?.title ?? null) : null;
+
   const initialTurn = await buildInitialTutorTurnForMode({
     lessonId: parsed.data.lessonId,
     mode: parsed.data.mode as TutorMode | undefined,
     weakAreasSnapshot,
     preferredLanguage: resolvePreferredLanguage(viewer.profile.preferred_language),
+    priorLessonTitle,
   });
 
   const { data: session, error: sessionError } = await supabase

@@ -107,16 +107,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "We couldn't update this lesson." }, { status: 500 });
   }
 
-  const conceptMasteryResult = await upsertConceptMastery(
-    {
-      userId: viewer.user.id,
-      conceptId: `ccma:${result.segmentId}`,
-      lessonId: `ccma:${lesson.id}`,
-      rawScore: result.evaluation.score,
-      bloomLevel: result.bloomLevel,
-    },
-    supabase,
-  ).catch(() => ({ masteryDelta: 0 }));
+  const conceptMasteryResult = result.isSynthesisTurn
+    ? { masteryDelta: 0 }
+    : await upsertConceptMastery(
+        {
+          userId: viewer.user.id,
+          conceptId: `ccma:${result.segmentId}`,
+          lessonId: `ccma:${lesson.id}`,
+          rawScore: result.evaluation.score,
+          bloomLevel: result.bloomLevel,
+        },
+        supabase,
+      ).catch(() => ({ masteryDelta: 0 }));
 
   const { data: tutorTurn, error: tutorTurnError } = await supabase
     .from("ccma_tutor_turns")
@@ -125,10 +127,10 @@ export async function POST(request: Request) {
       actor: "tutor",
       turn_type: result.nextState.step,
       content: result.message,
-      correctness: result.evaluation.correct ? "correct" : "incorrect",
-      bloom_level: result.bloomLevel,
-      segment_id: result.segmentId,
-      mastery_delta: conceptMasteryResult.masteryDelta,
+      correctness: result.isSynthesisTurn ? null : (result.evaluation.correct ? "correct" : "incorrect"),
+      bloom_level: result.isSynthesisTurn ? null : result.bloomLevel,
+      segment_id: result.isSynthesisTurn ? null : result.segmentId,
+      mastery_delta: result.isSynthesisTurn ? null : conceptMasteryResult.masteryDelta,
     })
     .select("*")
     .single();
@@ -138,11 +140,13 @@ export async function POST(request: Request) {
   }
 
   await Promise.allSettled([
-    updateDomainMastery({
-      userId: viewer.user.id,
-      lesson,
-      evaluation: result.evaluation,
-    }),
+    result.isSynthesisTurn
+      ? Promise.resolve()
+      : updateDomainMastery({
+          userId: viewer.user.id,
+          lesson,
+          evaluation: result.evaluation,
+        }),
     result.nextState.sessionComplete
       ? updateStudyStreak(viewer.user.id, supabase)
       : Promise.resolve(),

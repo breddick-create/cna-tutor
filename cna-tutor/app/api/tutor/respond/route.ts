@@ -110,16 +110,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "We couldn't update this lesson." }, { status: 500 });
   }
 
-  const conceptMasteryResult = await upsertConceptMastery(
-    {
-      userId: viewer.user.id,
-      conceptId: result.segmentId,
-      lessonId: lesson.id,
-      rawScore: result.evaluation.score,
-      bloomLevel: result.bloomLevel,
-    },
-    supabase,
-  ).catch(() => ({ masteryDelta: 0 }));
+  const conceptMasteryResult = result.isSynthesisTurn
+    ? { masteryDelta: 0 }
+    : await upsertConceptMastery(
+        {
+          userId: viewer.user.id,
+          conceptId: result.segmentId,
+          lessonId: lesson.id,
+          rawScore: result.evaluation.score,
+          bloomLevel: result.bloomLevel,
+        },
+        supabase,
+      ).catch(() => ({ masteryDelta: 0 }));
 
   const { data: tutorTurn, error: tutorTurnError } = await supabase
     .from("tutor_turns")
@@ -128,10 +130,10 @@ export async function POST(request: Request) {
       actor: "tutor",
       turn_type: result.nextState.step,
       content: result.message,
-      correctness: result.evaluation.correct ? "correct" : "incorrect",
-      bloom_level: result.bloomLevel,
-      segment_id: result.segmentId,
-      mastery_delta: conceptMasteryResult.masteryDelta,
+      correctness: result.isSynthesisTurn ? null : (result.evaluation.correct ? "correct" : "incorrect"),
+      bloom_level: result.isSynthesisTurn ? null : result.bloomLevel,
+      segment_id: result.isSynthesisTurn ? null : result.segmentId,
+      mastery_delta: result.isSynthesisTurn ? null : conceptMasteryResult.masteryDelta,
     })
     .select("*")
     .single();
@@ -156,11 +158,13 @@ export async function POST(request: Request) {
   const daysSinceLastStudy = viewer.profile.last_activity_at
     ? Math.floor((Date.now() - new Date(viewer.profile.last_activity_at).getTime()) / (1000 * 60 * 60 * 24))
     : null;
-  await updateDomainMastery({
-    userId: viewer.user.id,
-    lesson,
-    evaluation: result.evaluation,
-  }).catch(() => undefined);
+  if (!result.isSynthesisTurn) {
+    await updateDomainMastery({
+      userId: viewer.user.id,
+      lesson,
+      evaluation: result.evaluation,
+    }).catch(() => undefined);
+  }
 
   let newAchievements: Array<{ slug: string; title: string; description: string }> = [];
 

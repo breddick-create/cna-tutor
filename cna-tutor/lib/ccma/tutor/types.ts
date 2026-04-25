@@ -9,7 +9,9 @@ export type TutorStep =
   | "remediate"
   | "advance"
   | "wrap"
-  | "completed";
+  | "completed"
+  | "synthesis_prompt"
+  | "synthesis_ack";
 
 export type LessonConceptMatch = {
   label: string;
@@ -88,6 +90,10 @@ export type TutorSessionState = {
   sessionPhase: SessionPhase;
   affirmationIndex: number;
   correctionIndex: number;
+  // Session flow
+  topicsSinceSynthesis: number;
+  synthesisMode: boolean;
+  priorLessonTitle: string | null;
 };
 
 export type TutorEvaluation = {

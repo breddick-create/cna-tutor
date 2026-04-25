@@ -147,6 +147,7 @@ export function createInitialTutorSessionState(
   modeOverride?: TutorMode,
   weakAreasSnapshot: string[] = [],
   preferredLanguage: SupportedLanguage = "en",
+  priorLessonTitle: string | null = null,
 ): TutorSessionState {
   const lesson = getTutorLesson(lessonId);
   if (!lesson) throw new Error(`Unknown lesson id: ${lessonId}`);
@@ -171,6 +172,9 @@ export function createInitialTutorSessionState(
     sessionPhase: "open",
     affirmationIndex: 0,
     correctionIndex: 0,
+    topicsSinceSynthesis: 0,
+    synthesisMode: false,
+    priorLessonTitle,
   };
 }
 
@@ -228,12 +232,15 @@ export function parseTutorSessionState(
     sessionPhase: (raw.sessionPhase as SessionPhase) ?? deriveSessionPhase(currentTopicIndex, topics.length, sessionComplete),
     affirmationIndex: (raw.affirmationIndex as number) ?? 0,
     correctionIndex: (raw.correctionIndex as number) ?? 0,
+    topicsSinceSynthesis: (raw.topicsSinceSynthesis as number) ?? 0,
+    synthesisMode: (raw.synthesisMode as boolean) ?? false,
+    priorLessonTitle: (raw.priorLessonTitle as string | null) ?? null,
   };
 }
 
 // ─── Message generation ────────────────────────────────────────────────────
 
-type TurnAction = "intro" | "correct" | "incorrect" | "force_advance" | "wrap";
+type TurnAction = "intro" | "correct" | "incorrect" | "force_advance" | "wrap" | "synthesis_prompt" | "synthesis_ack";
 
 type MessageArgs = {
   action: TurnAction;
@@ -250,6 +257,7 @@ type MessageArgs = {
   state: TutorSessionState;
   affirmationPhrase: string;
   correctionPhrase: string;
+  synthesisTopicTitles?: string[];
 };
 
 function buildPrompt(args: MessageArgs): string {
@@ -257,15 +265,20 @@ function buildPrompt(args: MessageArgs): string {
     action, lesson, currentSegment, nextSegment,
     topicNumber, totalTopics, attemptNumber,
     evaluation, studentMessage, masteredTitles, struggledTitles, state,
-    affirmationPhrase, correctionPhrase,
+    affirmationPhrase, correctionPhrase, synthesisTopicTitles,
   } = args;
 
   const lines: string[] = [];
 
   switch (action) {
-    case "intro":
+    case "intro": {
+      const priorLine = state.priorLessonTitle
+        ? `PRIOR LESSON: Student last studied "${state.priorLessonTitle}". Open with a single bridging sentence connecting it to today's lesson.`
+        : "";
       lines.push(
         `ACTION: Begin the lesson. Introduce "${lesson.title}" warmly in 1-2 sentences.`,
+        priorLine,
+        `TODAY'S GOAL: ${lesson.learningGoal}`,
         `TOPIC 1 OF ${totalTopics}: "${currentSegment.title}"`,
         `CONCEPT TO TEACH: ${currentSegment.concept}`,
         `EXAMPLE TO SHARE: ${currentSegment.example}`,
@@ -273,6 +286,7 @@ function buildPrompt(args: MessageArgs): string {
         `"${currentSegment.question}"`,
       );
       break;
+    }
 
     case "correct":
       if (nextSegment) {
@@ -286,16 +300,19 @@ function buildPrompt(args: MessageArgs): string {
           `"${nextSegment.question}"`,
         );
       } else {
+        const nextLessonTitle = lesson.nextRecommendedLessonIds.length > 0
+          ? (getTutorLesson(lesson.nextRecommendedLessonIds[0])?.title ?? null)
+          : null;
         lines.push(
           `ACTION: Student answered the final topic correctly. Lesson complete.`,
           `Open with this affirmation (use it naturally): "${affirmationPhrase}"`,
           `EXPLANATION: ${evaluation?.correctExplanation ?? currentSegment.correctExplanation}`,
-          `Give a 2-3 sentence summary of the lesson.`,
-          masteredTitles.length > 0 ? `Topics mastered: ${masteredTitles.join(", ")}.` : "",
-          struggledTitles.length > 0
-            ? `Tell the student to revisit these before the Texas CNA exam: ${struggledTitles.join(", ")}.`
-            : "Celebrate — they mastered every topic.",
-          `Do NOT ask another question. Prompt them to take the quiz or start the next lesson.`,
+          ``,
+          `SESSION CLOSE — write as flowing prose (no numbered headers):`,
+          `1. In 1-2 sentences, summarize the main concepts covered: ${masteredTitles.join(", ")}.${struggledTitles.length ? ` Note ${struggledTitles.join(", ")} still need review.` : " All topics mastered."}`,
+          `2. Call out the single most important thing to remember before next time.`,
+          `3. ${nextLessonTitle ? `Preview the next lesson: "${nextLessonTitle}" in 1 sentence.` : "Encourage them to take the quiz to lock in their knowledge."}`,
+          `Do NOT ask another question.`,
         );
       }
       break;
@@ -338,13 +355,19 @@ function buildPrompt(args: MessageArgs): string {
           `Tone: supportive and forward-looking. Do NOT say "correct" or "great job."`,
         );
       } else {
+        const nextLessonTitle = lesson.nextRecommendedLessonIds.length > 0
+          ? (getTutorLesson(lesson.nextRecommendedLessonIds[0])?.title ?? null)
+          : null;
+        const allTitles = [...masteredTitles, ...struggledTitles, currentSegment.title];
         lines.push(
-          `ACTION: Student did not master the final topic after ${MAX_ATTEMPTS_PER_TOPIC} attempts. Give answer and summarize.`,
+          `ACTION: Student did not master the final topic after ${MAX_ATTEMPTS_PER_TOPIC} attempts. Give answer and close session.`,
           `CORRECT ANSWER TO STATE: "${currentSegment.idealAnswer}"`,
           `MEMORY TIP: ${currentSegment.memoryTip}`,
-          `Give a brief lesson summary.`,
-          masteredTitles.length > 0 ? `Topics mastered: ${masteredTitles.join(", ")}.` : "",
-          `Topics to review before the Texas CNA exam: ${[...struggledTitles, currentSegment.title].join(", ")}.`,
+          ``,
+          `SESSION CLOSE — write as flowing prose (no numbered headers):`,
+          `1. Summarize the concepts covered: ${[...new Set(allTitles)].join(", ")}.`,
+          `2. Identify the single most important concept for them to review before next time.`,
+          `3. ${nextLessonTitle ? `Preview the next lesson: "${nextLessonTitle}" in 1 sentence.` : "Encourage them to review and take the quiz."}`,
           `Do NOT ask another question.`,
         );
       }
@@ -361,6 +384,32 @@ function buildPrompt(args: MessageArgs): string {
         `Do NOT ask another question. Prompt them to take the quiz or start another lesson.`,
       );
       break;
+
+    case "synthesis_prompt": {
+      const covered = synthesisTopicTitles ?? [];
+      lines.push(
+        `ACTION: Mid-session synthesis check-in. The student has covered ${covered.length} topics. Pause the Q&A briefly.`,
+        `TOPICS COVERED SO FAR: ${covered.join(" → ")}`,
+        `Ask 1 open-ended synthesis question that connects these concepts to a real clinical situation.`,
+        `Frame it naturally — e.g. "Thinking about what we've covered — if you were caring for a resident who..."`,
+        `Keep it concise: 1-2 sentences of setup, then the question. Do NOT introduce the next topic yet.`,
+      );
+      break;
+    }
+
+    case "synthesis_ack": {
+      lines.push(
+        `ACTION: Student responded to a synthesis check-in. In 1 sentence, acknowledge their response (affirm the insight or gently add to it).`,
+        `STUDENT SAID: "${studentMessage ?? ""}"`,
+        `Then transition naturally into the next topic.`,
+        `TOPIC ${topicNumber} OF ${totalTopics}: "${currentSegment.title}"`,
+        `CONCEPT TO TEACH: ${currentSegment.concept}`,
+        `EXAMPLE TO SHARE: ${currentSegment.example}`,
+        `REQUIRED CLOSING QUESTION — end your response with this question exactly:`,
+        `"${currentSegment.question}"`,
+      );
+      break;
+    }
   }
 
   lines.push(
@@ -370,33 +419,35 @@ function buildPrompt(args: MessageArgs): string {
     `TUTORING MODE: ${state.mode}`,
     `SESSION PHASE: ${state.sessionPhase} (open=orientation, core=main teaching, close=wrap-up)`,
     `LANGUAGE: ${state.preferredLanguage}`,
-    `Output: keep it under 200 words. Sound like a warm CNA instructor. No bullet walls.`,
+    `Output: keep it under 220 words. Sound like a warm CNA instructor. No bullet walls.`,
   );
 
   return lines.filter(Boolean).join("\n");
 }
 
 function fallbackMessage(args: MessageArgs): string {
-  const { action, currentSegment, nextSegment, lesson, evaluation, topicNumber, totalTopics, masteredTitles, struggledTitles } = args;
+  const { action, currentSegment, nextSegment, lesson, evaluation, topicNumber, totalTopics, masteredTitles, struggledTitles, synthesisTopicTitles, studentMessage } = args;
 
   switch (action) {
     case "intro":
       return [
-        `Today we're working on ${lesson.title}.`,
+        args.state.priorLessonTitle ? `Building on what you covered in ${args.state.priorLessonTitle}, today we're tackling ${lesson.title}.` : `Today we're working on ${lesson.title}.`,
         currentSegment.concept,
         `Example: ${currentSegment.example}`,
         currentSegment.question,
-      ].join("\n\n");
+      ].filter(Boolean).join("\n\n");
 
     case "correct":
       if (!nextSegment) {
+        const nextLessonTitle = lesson.nextRecommendedLessonIds.length > 0
+          ? (getTutorLesson(lesson.nextRecommendedLessonIds[0])?.title ?? null)
+          : null;
         return [
           evaluation?.correctExplanation ?? "Great work!",
-          lesson.completionMessage,
-          struggledTitles.length > 0
-            ? `Review before your exam: ${struggledTitles.join(", ")}.`
-            : "You showed solid understanding throughout.",
-        ].join("\n\n");
+          `Topics covered this session: ${masteredTitles.join(", ")}.`,
+          masteredTitles.length > 0 ? `Key concept to hold onto: ${masteredTitles[masteredTitles.length - 1]}.` : "",
+          nextLessonTitle ? `Up next: ${nextLessonTitle}.` : "Take the quiz to lock in your knowledge.",
+        ].filter(Boolean).join("\n\n");
       }
       return [
         evaluation?.correctExplanation ?? "That's right.",
@@ -415,11 +466,14 @@ function fallbackMessage(args: MessageArgs): string {
 
     case "force_advance":
       if (!nextSegment) {
+        const nextLessonTitle = lesson.nextRecommendedLessonIds.length > 0
+          ? (getTutorLesson(lesson.nextRecommendedLessonIds[0])?.title ?? null)
+          : null;
         return [
           `The answer: ${currentSegment.idealAnswer}`,
           `Memory tip: ${currentSegment.memoryTip}`,
-          lesson.completionMessage,
-          struggledTitles.length > 0 ? `Review before your exam: ${[...struggledTitles, currentSegment.title].join(", ")}.` : "",
+          `Topics covered: ${[...masteredTitles, ...struggledTitles, currentSegment.title].join(", ")}.`,
+          nextLessonTitle ? `Up next: ${nextLessonTitle}.` : "Review these concepts, then take the quiz.",
         ].filter(Boolean).join("\n\n");
       }
       return [
@@ -436,6 +490,20 @@ function fallbackMessage(args: MessageArgs): string {
         struggledTitles.length > 0
           ? `Review before your exam: ${struggledTitles.join(", ")}.`
           : "Solid session — strong understanding throughout.",
+      ].join("\n\n");
+
+    case "synthesis_prompt":
+      return [
+        `Great work covering ${(synthesisTopicTitles ?? []).join(" and ")}.`,
+        `Before we move on — how would these concepts connect if you were caring for a resident who just had a fall? What would you do first?`,
+      ].join("\n\n");
+
+    case "synthesis_ack":
+      return [
+        studentMessage ? `Good thinking on that.` : `Good reflection.`,
+        `Let's keep going — topic ${topicNumber} of ${totalTopics}: ${currentSegment.title}.`,
+        currentSegment.concept,
+        currentSegment.question,
       ].join("\n\n");
   }
 }
@@ -480,6 +548,7 @@ export async function buildInitialTutorTurnForMode(args: {
   mode?: TutorMode;
   weakAreasSnapshot?: string[];
   preferredLanguage?: SupportedLanguage;
+  priorLessonTitle?: string | null;
 }) {
   const lesson = getTutorLesson(args.lessonId);
   if (!lesson) throw new Error(`Unknown lesson id: ${args.lessonId}`);
@@ -489,6 +558,7 @@ export async function buildInitialTutorTurnForMode(args: {
     args.mode,
     args.weakAreasSnapshot ?? [],
     args.preferredLanguage ?? "en",
+    args.priorLessonTitle ?? null,
   );
 
   const currentSegment = lesson.segments[0];
@@ -542,6 +612,59 @@ export async function processTutorReply(args: {
 
   if (!currentSegment) throw new Error(`Invalid topic index: ${topicIndex}`);
 
+  // ── 0. Synthesis ack: student responded to a synthesis check-in ───────────
+
+  if (state.synthesisMode) {
+    const syntheticEval: TutorEvaluation = {
+      correct: true,
+      matchedConcepts: [],
+      missedConcepts: [],
+      score: 100,
+      idealAnswer: "",
+      correctExplanation: "",
+      incorrectExplanation: "",
+      memoryTip: "",
+    };
+
+    const message = await generateMessage({
+      action: "synthesis_ack",
+      lesson,
+      currentSegment, // already points to next topic (currentTopicIndex was advanced at synthesis_prompt)
+      nextSegment: lesson.segments[topicIndex + 1] ?? null,
+      topicNumber: topicIndex + 1,
+      totalTopics,
+      attemptNumber: 0,
+      evaluation: null,
+      studentMessage,
+      masteredTitles: state.topics.filter((t) => t.mastered).map((t) => t.title),
+      struggledTitles: state.topics.filter((t) => t.taught && !t.mastered).map((t) => t.title),
+      state,
+      affirmationPhrase: selectAffirmation(state.affirmationIndex),
+      correctionPhrase: selectCorrection(state.correctionIndex),
+    });
+
+    const nextState: TutorSessionState = {
+      ...state,
+      synthesisMode: false,
+      topicsSinceSynthesis: 0,
+      awaitingAnswer: true,
+      tutorLastGaveAnswer: false,
+      lastStudentMessage: studentMessage,
+      lastTutorMessage: message,
+      step: "synthesis_ack",
+    };
+
+    return {
+      lesson,
+      evaluation: syntheticEval,
+      nextState,
+      message,
+      bloomLevel: 2,
+      segmentId: currentSegment.id,
+      isSynthesisTurn: true,
+    };
+  }
+
   // ── 1. Grade ─────────────────────────────────────────────────────────────
 
   let evaluation: TutorEvaluation;
@@ -585,12 +708,20 @@ export async function processTutorReply(args: {
   const masteredTitles = updatedTopics.filter((t) => t.mastered).map((t) => t.title);
   const struggledTitles = updatedTopics.filter((t) => t.taught && !t.mastered).map((t) => t.title);
 
-  // ── 4. Determine action for message generation ────────────────────────────
+  // ── 4. Check synthesis trigger ────────────────────────────────────────────
+
+  const newTopicsSinceSynthesis = advance ? state.topicsSinceSynthesis + 1 : state.topicsSinceSynthesis;
+  const triggerSynthesis = advance && !sessionComplete && newTopicsSinceSynthesis >= 2;
+
+  // ── 5. Determine action for message generation ────────────────────────────
 
   let action: TurnAction;
   let step: TutorSessionState["step"];
 
-  if (sessionComplete) {
+  if (triggerSynthesis) {
+    action = "synthesis_prompt";
+    step = "synthesis_prompt";
+  } else if (sessionComplete) {
     action = forceAdvance ? "force_advance" : "correct";
     step = "completed";
   } else if (advance) {
@@ -601,9 +732,17 @@ export async function processTutorReply(args: {
     step = "remediate";
   }
 
-  const nextSegment = sessionComplete ? null : lesson.segments[nextTopicIndex];
+  // For synthesis_prompt, don't show next topic yet; for normal advance, show it
+  const nextSegment = (triggerSynthesis || sessionComplete) ? null : lesson.segments[nextTopicIndex];
 
-  // ── 5. Generate message ───────────────────────────────────────────────────
+  // Synthesis topic titles: the segments covered since last synthesis (including just-answered)
+  const synthesisTopicTitles = triggerSynthesis
+    ? lesson.segments
+        .slice(Math.max(0, nextTopicIndex - newTopicsSinceSynthesis), nextTopicIndex)
+        .map((s) => s.title)
+    : undefined;
+
+  // ── 6. Generate message ───────────────────────────────────────────────────
 
   const nextAffirmationIndex = correct
     ? nextIndex(state.affirmationIndex, AFFIRMATIONS.length)
@@ -627,9 +766,10 @@ export async function processTutorReply(args: {
     state: { ...state, currentTopicAttempts: newAttempts },
     affirmationPhrase: selectAffirmation(state.affirmationIndex),
     correctionPhrase: selectCorrection(state.correctionIndex),
+    synthesisTopicTitles,
   });
 
-  // ── 6. Build next state ───────────────────────────────────────────────────
+  // ── 7. Build next state ───────────────────────────────────────────────────
 
   const correctCount = state.correctCount + (correct ? 1 : 0);
   const masteryScore = Math.round((masteredTitles.length / totalTopics) * 100);
@@ -658,9 +798,11 @@ export async function processTutorReply(args: {
     sessionPhase: nextPhase,
     affirmationIndex: nextAffirmationIndex,
     correctionIndex: nextCorrectionIndex,
+    synthesisMode: triggerSynthesis,
+    topicsSinceSynthesis: triggerSynthesis ? 0 : newTopicsSinceSynthesis,
   };
 
   const bloomLevel = inferBloomLevel(currentSegment.questionType);
 
-  return { lesson, evaluation, nextState, message, bloomLevel, segmentId: currentSegment.id };
+  return { lesson, evaluation, nextState, message, bloomLevel, segmentId: currentSegment.id, isSynthesisTurn: false };
 }
