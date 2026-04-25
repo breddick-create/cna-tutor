@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { CohortProgressReport } from "@/components/admin/cohort-progress-report";
 import { DomainWeaknessTrends } from "@/components/admin/domain-weakness-trends";
+import { ReadinessDistribution } from "@/components/admin/readiness-distribution";
 import { PrintReportButton } from "@/components/admin/print-report-button";
 import { ParticipantsTable } from "@/components/admin/participants-table";
 import { ReportFilters } from "@/components/admin/report-filters";
@@ -195,6 +196,13 @@ export default async function AdminPage({
           </div>
           <TrendLine tone="accent" values={dashboard.cohortConfidence.trend} />
         </div>
+      </section>
+
+      <section className="admin-report-chrome">
+        <ReadinessDistribution
+          rows={dashboard.readinessDistribution}
+          studentCount={dashboard.studentCount}
+        />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr] admin-report-chrome">

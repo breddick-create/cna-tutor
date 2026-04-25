@@ -543,6 +543,21 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
     pretestIncomplete: reportRows.filter((row) => row.status === "pretest_incomplete").length,
   };
 
+  const readinessDistribution = [
+    { label: "Not started", count: 0, color: "bg-[rgba(123,144,158,0.35)]" },
+    { label: "0–24", count: 0, color: "bg-[rgba(166,60,47,0.7)]" },
+    { label: "25–49", count: 0, color: "bg-[rgba(217,111,50,0.7)]" },
+    { label: "50–74", count: 0, color: "bg-[rgba(200,170,30,0.75)]" },
+    { label: "75+", count: 0, color: "bg-[linear-gradient(135deg,var(--accent),var(--brand))]" },
+  ];
+  for (const row of reportRows) {
+    if (row.readinessScore === null) readinessDistribution[0].count++;
+    else if (row.readinessScore < 25) readinessDistribution[1].count++;
+    else if (row.readinessScore < 50) readinessDistribution[2].count++;
+    else if (row.readinessScore < 75) readinessDistribution[3].count++;
+    else readinessDistribution[4].count++;
+  }
+
   const weaknessTrends = Array.from(weaknessTrendMap.values())
     .map((trend) => ({
       domainSlug: trend.domainSlug,
@@ -615,6 +630,7 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
     examReadyStudents: reportRows.filter((row) => row.status === "exam_ready").slice(0, 8),
     participantRows: reportRows,
     weaknessTrends,
+    readinessDistribution,
     statusTone: getStatusTone,
   };
 }
