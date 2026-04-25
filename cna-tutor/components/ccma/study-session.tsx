@@ -143,8 +143,11 @@ export function StudySession({
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [lastCorrectTurnId, setLastCorrectTurnId] = useState<string | null>(null);
   const lastSpokenTutorTurnIdRef = useRef<string | null>(null);
   const pendingAutoplayTurnIdRef = useRef<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const turnsEndRef = useRef<HTMLDivElement>(null);
   const modeLabel = getTutorModeLabel(sessionState.mode);
   const weakAreasLabel = sessionState.weakAreasSnapshot.join(", ");
 
@@ -280,6 +283,15 @@ export function StudySession({
     };
   }, [turns, voiceEnabled, voiceReady, selectedVoice]);
 
+  useEffect(() => {
+    turnsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [turns]);
+
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -324,7 +336,12 @@ export function StudySession({
       setSessionStatus(data.session.status);
       setSessionState(data.session.state);
       setActiveSeconds(data.session.tracking.activeSeconds);
+      if (data.evaluation.correct) setLastCorrectTurnId(data.tutorTurn.id);
       setDraft("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        setTimeout(() => textareaRef.current?.focus(), 50);
+      }
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -344,6 +361,15 @@ export function StudySession({
 
   return (
     <div className="grid gap-6 pb-28 xl:grid-cols-[0.72fr_0.28fr] xl:pb-0">
+      <style>{`
+        @keyframes correct-flash {
+          0%   { box-shadow: 0 0 0 0 rgba(23,60,255,0); background-color: rgba(23,60,255,0.08); }
+          30%  { box-shadow: 0 0 0 6px rgba(23,200,120,0.22); background-color: rgba(23,200,120,0.13); }
+          70%  { box-shadow: 0 0 0 4px rgba(23,200,120,0.1); background-color: rgba(23,200,120,0.08); }
+          100% { box-shadow: 0 0 0 0 rgba(23,60,255,0); background-color: rgba(23,60,255,0.08); }
+        }
+        .study-correct-flash { animation: correct-flash 1.2s ease-out forwards; }
+      `}</style>
       <section className="space-y-6">
         <div className="panel rounded-[1.75rem] p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -439,11 +465,11 @@ export function StudySession({
               turns.map((turn) => (
                 <article
                   key={turn.id}
-                  className={`rounded-[1.5rem] border p-4 ${
+                  className={`rounded-[1.5rem] border p-4 transition-shadow ${
                     turn.actor === "tutor"
                       ? "border-[rgba(23,60,255,0.18)] bg-[rgba(23,60,255,0.08)]"
                       : "border-[var(--border)] bg-white/80"
-                  }`}
+                  } ${turn.id === lastCorrectTurnId ? "study-correct-flash" : ""}`}
                 >
                   <div className="flex items-center justify-between gap-4">
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[color:var(--brand-strong)]">
@@ -500,15 +526,26 @@ export function StudySession({
               />
             )}
           </div>
+          <div ref={turnsEndRef} />
 
           <form className="mt-6 space-y-3" id="study-session-form" onSubmit={handleSubmit}>
             <label className="block text-sm font-medium" htmlFor="student-response">
               {t({ en: "Your answer", es: "Tu respuesta" })}
             </label>
             <textarea
-              className="input-base min-h-32 resize-y text-base"
+              ref={textareaRef}
+              className="input-base min-h-28 resize-none overflow-hidden text-base"
               id="student-response"
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                autoResize(event.target);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
               placeholder={t({
                 en: "Type your answer here...",
                 es: "Escribe tu respuesta aqui...",
@@ -518,8 +555,8 @@ export function StudySession({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-muted text-sm">
                 {t({
-                  en: "Give your best answer before moving on.",
-                  es: "Da tu mejor respuesta antes de continuar.",
+                  en: "Give your best answer. Ctrl+Enter to submit.",
+                  es: "Da tu mejor respuesta. Ctrl+Enter para enviar.",
                 })}
               </p>
               <button
