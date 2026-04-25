@@ -301,6 +301,7 @@ export async function getCcmaStudentDashboard(args: {
     { data: assessmentAttempts },
     { data: tutorSessions },
     { data: profileRow },
+    { data: streakRow },
   ] = await Promise.all([
     supabase
       .from("ccma_quiz_attempts")
@@ -326,6 +327,11 @@ export async function getCcmaStudentDashboard(args: {
       .eq("id", args.userId)
       .eq("product", "ccma")
       .single(),
+    supabase
+      .from("study_streaks")
+      .select("current_streak, longest_streak")
+      .eq("user_id", args.userId)
+      .maybeSingle(),
   ]);
 
   const recentQuizAttempts = quizAttempts ?? [];
@@ -395,6 +401,10 @@ export async function getCcmaStudentDashboard(args: {
   return {
     progression,
     isInactive: isInactive(profileRow?.last_activity_at ?? null),
+    streak: {
+      current: streakRow?.current_streak ?? 0,
+      longest: streakRow?.longest_streak ?? 0,
+    },
     nextStep,
     recoveryPlan,
     weakAreas: progression.weakAreas.map((area) => ({

@@ -1,4 +1,5 @@
 import type { SupportedLanguage } from "@/lib/ccma/i18n/languages";
+import type { SessionPhase } from "@/lib/ccma/tutor/types";
 
 type TeacherPromptOptions = {
   mode:
@@ -11,6 +12,7 @@ type TeacherPromptOptions = {
   topic?: string;
   weakAreas?: string[];
   preferredLanguage?: SupportedLanguage;
+  sessionPhase?: SessionPhase;
 };
 
 const CCMA_DOMAINS = [
@@ -76,6 +78,30 @@ function modeGuidance(mode: TeacherPromptOptions["mode"]) {
   ].join("\n");
 }
 
+function phaseGuidance(phase: SessionPhase) {
+  if (phase === "open") {
+    return [
+      "- You are in the OPEN phase: orient the learner and set the goal for today.",
+      "- Briefly explain what this lesson will cover before asking the first question.",
+      "- Start with a Bloom level 1-2 check: recall or understanding.",
+    ].join("\n");
+  }
+
+  if (phase === "close") {
+    return [
+      "- You are in the CLOSE phase: consolidate and connect ideas.",
+      "- Tie the final concept back to exam readiness and clinic workflow.",
+      "- End with a short wrap-up after the final answer instead of opening a new thread.",
+    ].join("\n");
+  }
+
+  return [
+    "- You are in the CORE phase: teach, probe, and adapt.",
+    "- Move from recall to application to scenario-based reasoning as the learner succeeds.",
+    "- Use Socratic follow-up questions when the learner is close but not precise.",
+  ].join("\n");
+}
+
 function languageGuidance(preferredLanguage: SupportedLanguage) {
   if (preferredLanguage === "es") {
     return [
@@ -102,10 +128,14 @@ export function buildTutorSystemPrompt(options: TeacherPromptOptions) {
       : "";
 
   const preferredLanguage = options.preferredLanguage ?? "en";
+  const sessionPhase = options.sessionPhase ?? "core";
 
-  return `You're a CCMA exam prep instructor — warm, encouraging, and straight to the point. You've helped a lot of medical assistant students pass the NHA CCMA exam, and you genuinely want this learner to succeed.
+  return `You're a CCMA exam prep instructor - warm, encouraging, and straight to the point. You've helped a lot of medical assistant students pass the NHA CCMA exam, and you genuinely want this learner to succeed.
 
 Your whole job is to help them pass the NHA CCMA exam, so everything you teach has to line up with the exam blueprint and the real-world scope of a Certified Clinical Medical Assistant in an outpatient clinic setting.
+
+Session phase guidance:
+${phaseGuidance(sessionPhase)}
 
 A few things to keep in mind as you teach:
 - Focus on what the NHA CCMA exam actually tests — stick to the blueprint

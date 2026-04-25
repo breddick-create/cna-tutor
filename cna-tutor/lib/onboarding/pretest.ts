@@ -12,7 +12,15 @@ export type PretestDomainBreakdown = {
 };
 
 export function hasCompletedPretest(user: User) {
-  return typeof user.user_metadata?.pretest_completed_at === "string";
+  if (typeof user.user_metadata?.pretest_completed_at === "string") {
+    return true;
+  }
+
+  if (typeof user.user_metadata?.pretest_score === "number") {
+    return true;
+  }
+
+  return getPretestDomainBreakdown(user).length > 0;
 }
 
 export function getPretestScore(user: User) {

@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { BadgeCelebration } from "@/components/badges/badge-celebration";
 import { useLanguage } from "@/components/ccma/language-context";
 import {
   AssessmentAnswerReviewPanel,
   AssessmentBreakdownPanel,
 } from "@/components/exams/assessment-result-sections";
+import { appendEarnedBadgesParam } from "@/lib/learning/badge-query";
 import {
   MOCK_EXAM_RESULT_STORAGE_KEY,
   createStoredMockExamResult,
@@ -191,6 +193,9 @@ export function AssessmentRunner({
   const [timeRemainingSeconds, setTimeRemainingSeconds] = useState(timeLimitSeconds ?? 0);
   const [confidenceLevel, setConfidenceLevel] = useState<QuizConfidenceLevel | null>(null);
   const [quizStarted, setQuizStarted] = useState(!confidencePrompt);
+  const [newBadges, setNewBadges] = useState<
+    Array<{ slug: string; title: string; description: string }>
+  >([]);
 
   const modeLabel =
     mode === "pretest"
@@ -261,7 +266,12 @@ export function AssessmentRunner({
         const data = (await response.json()) as AssessmentResultPayload;
 
         if (mode === "pretest") {
-          router.push("/ccma/pretest/results");
+          router.push(
+            appendEarnedBadgesParam(
+              "/ccma/pretest/results",
+              (data.newAchievements ?? []).map((badge) => ({ slug: badge.slug })),
+            ),
+          );
           return;
         }
 
@@ -275,10 +285,16 @@ export function AssessmentRunner({
               }),
             ),
           );
-          router.push(resultsHref);
+          router.push(
+            appendEarnedBadgesParam(
+              resultsHref,
+              (data.newAchievements ?? []).map((badge) => ({ slug: badge.slug })),
+            ),
+          );
           return;
         }
 
+        setNewBadges(data.newAchievements ?? []);
         setResult(data);
       } catch (submitError) {
         setError(
@@ -352,6 +368,7 @@ export function AssessmentRunner({
 
   return (
     <div className="space-y-6 pb-28 md:pb-0">
+      <BadgeCelebration badges={newBadges} storageKey={`ccma-assessment-badges-${mode}-${domainSlug ?? "all"}`} />
       <div className="panel rounded-[1.75rem] p-5 sm:p-6">
         <p className="eyebrow">{modeLabel}</p>
         <h2 className="mt-3 text-2xl font-semibold sm:text-3xl">{title}</h2>

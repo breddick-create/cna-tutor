@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { SearchParamBadgeCelebration } from "@/components/badges/search-param-badge-celebration";
 import { AppShell } from "@/components/layout/app-shell";
 import { LanguageProvider } from "@/components/ccma/language-context";
 import {
@@ -121,6 +122,7 @@ export default async function StudentLayout({
 
   return (
     <LanguageProvider language={preferredLanguage}>
+      <SearchParamBadgeCelebration />
       <AppShell
         email={viewer.profile.email}
         navigation={navigation}

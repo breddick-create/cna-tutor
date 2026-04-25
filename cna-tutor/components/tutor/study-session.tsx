@@ -4,6 +4,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { BadgeCelebration } from "@/components/badges/badge-celebration";
 import { useLanguage } from "@/components/student/language-context";
 import { StudentEmptyState } from "@/components/student/student-empty-state";
 import type { SupplementaryVideo } from "@/content/texas-cna/video-library";
@@ -20,6 +21,11 @@ type StudyTurn = {
 };
 
 type TutorResponse = {
+  newAchievements?: Array<{
+    slug: string;
+    title: string;
+    description: string;
+  }>;
   studentTurn: Omit<StudyTurn, "id" | "correctness">;
   tutorTurn: StudyTurn;
   evaluation: {
@@ -143,6 +149,9 @@ export function StudySession({
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [voiceReady, setVoiceReady] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [newBadges, setNewBadges] = useState<
+    Array<{ slug: string; title: string; description: string }>
+  >([]);
   const lastSpokenTutorTurnIdRef = useRef<string | null>(null);
   const pendingAutoplayTurnIdRef = useRef<string | null>(null);
   const modeLabel = getTutorModeLabel(sessionState.mode);
@@ -324,6 +333,7 @@ export function StudySession({
       setSessionStatus(data.session.status);
       setSessionState(data.session.state);
       setActiveSeconds(data.session.tracking.activeSeconds);
+      setNewBadges(data.newAchievements ?? []);
       setDraft("");
     } catch (submitError) {
       setError(
@@ -344,6 +354,7 @@ export function StudySession({
 
   return (
     <div className="grid gap-6 pb-28 xl:grid-cols-[0.72fr_0.28fr] xl:pb-0">
+      <BadgeCelebration badges={newBadges} storageKey={`study-badges-${initialSession.id}`} />
       <section className="space-y-6">
         <div className="panel rounded-[1.75rem] p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">

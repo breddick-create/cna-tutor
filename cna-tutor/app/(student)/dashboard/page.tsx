@@ -4,8 +4,12 @@ import type { ReactNode } from "react";
 
 import { updateLanguagePreferenceAction } from "@/app/(student)/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { BadgeIcon } from "@/components/badges/badge-icon";
+import { ReadinessRing } from "@/components/dashboard/readiness-ring";
 import { ProgressBar } from "@/components/dashboard/progress-bar";
+import { StreakBadge } from "@/components/dashboard/streak-badge";
 import { TrendLine } from "@/components/dashboard/trend-line";
+import { CnaSkillsTrainingVideos } from "@/components/student/cna-skills-training-videos";
 import { ReadinessChecklist } from "@/components/student/readiness-checklist";
 import { StudentEmptyState } from "@/components/student/student-empty-state";
 import { requireViewer } from "@/lib/auth/session";
@@ -358,9 +362,16 @@ export default async function StudentDashboardPage({
           title={text("Your readiness score", "Tu puntaje de preparacion")}
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-5xl font-semibold">{dashboard.progression.readinessScore}%</p>
-              <p className="mt-2 text-lg font-semibold">{dashboard.progression.readinessLabel}</p>
+            <div className="flex items-center gap-5">
+              <ReadinessRing
+                label={text("Exam readiness", "Preparacion para el examen")}
+                size={126}
+                value={dashboard.progression.readinessScore}
+              />
+              <div>
+                <p className="text-5xl font-semibold">{dashboard.progression.readinessScore}%</p>
+                <p className="mt-2 text-lg font-semibold">{dashboard.progression.readinessLabel}</p>
+              </div>
             </div>
             <span
               className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${readinessTone}`}
@@ -396,6 +407,12 @@ export default async function StudentDashboardPage({
                   ? `${dashboard.practiceExamStatus.bestScore}%`
                   : text("Not yet", "Todavia no")
               }
+            />
+          </div>
+          <div className="mt-5">
+            <StreakBadge
+              currentStreak={dashboard.streak.current}
+              longestStreak={dashboard.streak.longest}
             />
           </div>
         </DashboardSection>
@@ -516,6 +533,38 @@ export default async function StudentDashboardPage({
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <DashboardSection
+          description="Earned badges stay bright. Locked badges stay visible so students always know what meaningful milestone comes next."
+          eyebrow="My Badges"
+          title="Track what you've earned and what's next"
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {dashboard.badges.all.map((badge) => (
+              <article
+                key={badge.slug}
+                className={`rounded-[1.5rem] border p-4 transition ${
+                  badge.earned
+                    ? "border-[rgba(32,77,141,0.16)] bg-[linear-gradient(135deg,rgba(255,249,242,0.98),rgba(247,250,255,0.98))] shadow-[0_16px_32px_rgba(32,48,61,0.08)]"
+                    : "border-[var(--border)] bg-[rgba(255,255,255,0.58)] opacity-70"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <BadgeIcon className="h-11 w-11 shrink-0" iconSlug={badge.iconSlug} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">{badge.title}</p>
+                    <p className="text-muted mt-2 text-sm leading-6">
+                      {badge.earned ? badge.description : badge.unlockConditionText}
+                    </p>
+                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--brand-strong)]">
+                      {badge.earned ? "Earned" : "Locked"}
+                    </p>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </DashboardSection>
+
         <DashboardSection
           description="These milestones turn the readiness score into a concrete checklist so you can see what still needs to be true before the app should call you exam-ready."
           eyebrow="Readiness Checklist"
@@ -756,6 +805,8 @@ export default async function StudentDashboardPage({
           </form>
         </DashboardSection>
       </section>
+
+      <CnaSkillsTrainingVideos />
     </div>
   );
 }

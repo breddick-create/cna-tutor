@@ -112,20 +112,22 @@ export function buildGuidedStudyPath(args: {
     weakStreak: domain.weakStreak,
     priorityLabel: domain.priorityLabel,
     recommendation: domain.recommendation,
-    lesson: getLessonByDomain(domain.domainSlug)[0] ?? null,
-  }));
+      lesson: getLessonByDomain(domain.domainSlug)[0] ?? null,
+    }));
 
   const firstIncompleteIndex = modules.findIndex(
-    (module) => !module.lesson || !completedLessonIds.has(module.lesson.id),
+    (module) => module.lesson && !completedLessonIds.has(module.lesson.id),
   );
   const nextModule =
-    (firstIncompleteIndex >= 0 ? modules[firstIncompleteIndex] : modules[0]) ?? null;
+    (firstIncompleteIndex >= 0
+      ? modules[firstIncompleteIndex]
+      : modules.find((module) => module.lesson) ?? modules[0]) ?? null;
 
   const modulesWithState = modules.map((module, index) => {
     if (firstIncompleteIndex === -1) {
       return {
         ...module,
-        state: "completed" as const,
+        state: module.lesson ? ("completed" as const) : ("locked" as const),
       };
     }
 

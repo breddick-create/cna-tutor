@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getViewer } from "@/lib/auth/session";
+import { evaluateBadges } from "@/lib/learning/badge-evaluator";
 import {
   getPretestDomainBreakdown,
   getPretestScore,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/onboarding/pretest";
 import { getStudentProgressionSnapshot } from "@/lib/progression/student";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { recordAssessmentAttempt } from "@/lib/exams/attempts";
 import { scoreAssessment } from "@/lib/exams/bank";
 import type { QuizConfidenceLevel } from "@/lib/exams/types";
@@ -26,10 +28,63 @@ const submitAssessmentSchema = z.object({
   domainSlug: z.string().trim().min(1).optional(),
   domainSlugs: z.array(z.string().trim().min(1)).max(3).optional(),
   questionIds: z.array(z.string().trim().min(1)).min(1).optional(),
-  answers: z.record(z.string(), z.string()),
-  timeSpentSeconds: z.number().int().min(0).max(60 * 60 * 2),
+  answers: z.record(z.string()),
+  timeSpentSeconds: z.coerce.number().int().min(0).max(60 * 60 * 2),
   confidenceLevel: z.enum(["not_confident", "somewhat_confident", "very_confident"]).optional(),
 });
+
+function normalizeAssessmentPayload(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+
+  const raw = input as Record<string, unknown>;
+  const answers =
+    raw.answers && typeof raw.answers === "object" && !Array.isArray(raw.answers)
+      ? Object.fromEntries(
+          Object.entries(raw.answers)
+            .filter(
+              ([questionId, choiceId]) =>
+                typeof questionId === "string" &&
+                questionId.trim().length > 0 &&
+                typeof choiceId === "string" &&
+                choiceId.trim().length > 0,
+            )
+            .map(([questionId, choiceId]) => [questionId, choiceId]),
+        )
+      : raw.answers;
+
+  const questionIds = Array.isArray(raw.questionIds)
+    ? raw.questionIds.filter(
+        (questionId): questionId is string =>
+          typeof questionId === "string" && questionId.trim().length > 0,
+      )
+    : raw.questionIds;
+
+  const domainSlugs = Array.isArray(raw.domainSlugs)
+    ? raw.domainSlugs.filter(
+        (domainSlug): domainSlug is string =>
+          typeof domainSlug === "string" && domainSlug.trim().length > 0,
+      )
+    : raw.domainSlugs;
+
+  return {
+    ...raw,
+    domainSlug:
+      typeof raw.domainSlug === "string" && raw.domainSlug.trim().length > 0
+        ? raw.domainSlug
+        : undefined,
+    domainSlugs,
+    questionIds,
+    answers,
+    timeSpentSeconds:
+      typeof raw.timeSpentSeconds === "number" || typeof raw.timeSpentSeconds === "string"
+        ? raw.timeSpentSeconds
+        : undefined,
+    confidenceLevel:
+      typeof raw.confidenceLevel === "string" ? raw.confidenceLevel : undefined,
+  };
+}
 
 export async function POST(request: Request) {
   const viewer = await getViewer();
@@ -42,7 +97,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Only student accounts can do that." }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = normalizeAssessmentPayload(await request.json());
   const parsed = submitAssessmentSchema.safeParse(body);
 
   if (!parsed.success) {
@@ -123,6 +178,39 @@ export async function POST(request: Request) {
     });
   }
 
+  const progression = await getStudentProgressionSnapshot({
+    userId: viewer.user.id,
+    pretestScore:
+      parsed.data.mode === "pretest" ? result.percent : getPretestScore(viewer.user),
+    pretestDomainBreakdown:
+      parsed.data.mode === "pretest"
+        ? result.domainBreakdown
+            .map((domain) => ({
+              domainSlug: domain.domainSlug,
+              domainTitle: domain.domainTitle,
+              correctCount: domain.correctCount,
+              totalQuestions: domain.totalQuestions,
+              percent: domain.percent,
+            }))
+            .sort((a, b) => a.percent - b.percent || a.domainTitle.localeCompare(b.domainTitle))
+        : getPretestDomainBreakdown(viewer.user),
+  });
+  const badgeSupabase = await createClient();
+  const newAchievements = await evaluateBadges({
+    userId: viewer.user.id,
+    trigger:
+      parsed.data.mode === "pretest"
+        ? "pretest_complete"
+        : parsed.data.mode === "mock_exam"
+          ? "mock_exam_complete"
+          : "quiz_complete",
+    supabase: badgeSupabase,
+    mockExamPercent: parsed.data.mode === "mock_exam" ? result.percent : undefined,
+    readinessScore: progression.readinessScore,
+    pretestCompleted: parsed.data.mode === "pretest" ? true : hasCompletedPretest(viewer.user),
+    userProduct: viewer.profile.product,
+  }).catch(() => []);
+
   return NextResponse.json({
     summary: {
       mode: parsed.data.mode,
@@ -136,6 +224,7 @@ export async function POST(request: Request) {
     },
     breakdown: result.domainBreakdown,
     questions: result.results,
+    newAchievements,
     drillComparisons:
       parsed.data.mode === "weak_area_drill"
         ? result.domainBreakdown.map((domain) => {

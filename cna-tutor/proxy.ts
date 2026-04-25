@@ -4,14 +4,6 @@ import { NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
-  const host = request.headers.get("host") ?? request.nextUrl.hostname;
-
-  if (host === "cna-tutor.vercel.app") {
-    const nextUrl = request.nextUrl.clone();
-    nextUrl.hostname = "hcci-tutor.vercel.app";
-    return NextResponse.redirect(nextUrl, 308);
-  }
-
   return updateSession(request);
 }
 

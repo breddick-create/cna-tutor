@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getCcmaViewer } from "@/lib/ccma/auth/session";
+import { evaluateBadges } from "@/lib/learning/badge-evaluator";
 import {
   getPretestDomainBreakdown,
   getPretestScore,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/ccma/onboarding/pretest";
 import { getStudentProgressionSnapshot } from "@/lib/ccma/progression/student";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { recordAssessmentAttempt } from "@/lib/ccma/exams/attempts";
 import { scoreAssessment } from "@/lib/ccma/exams/bank";
 import type { QuizConfidenceLevel } from "@/lib/ccma/exams/types";
@@ -123,6 +125,39 @@ export async function POST(request: Request) {
     });
   }
 
+  const progression = await getStudentProgressionSnapshot({
+    userId: viewer.user.id,
+    pretestScore:
+      parsed.data.mode === "pretest" ? result.percent : getPretestScore(viewer.user),
+    pretestDomainBreakdown:
+      parsed.data.mode === "pretest"
+        ? result.domainBreakdown
+            .map((domain) => ({
+              domainSlug: domain.domainSlug,
+              domainTitle: domain.domainTitle,
+              correctCount: domain.correctCount,
+              totalQuestions: domain.totalQuestions,
+              percent: domain.percent,
+            }))
+            .sort((a, b) => a.percent - b.percent || a.domainTitle.localeCompare(b.domainTitle))
+        : getPretestDomainBreakdown(viewer.user),
+  });
+  const badgeSupabase = await createClient();
+  const newAchievements = await evaluateBadges({
+    userId: viewer.user.id,
+    trigger:
+      parsed.data.mode === "pretest"
+        ? "pretest_complete"
+        : parsed.data.mode === "mock_exam"
+          ? "mock_exam_complete"
+          : "quiz_complete",
+    supabase: badgeSupabase,
+    mockExamPercent: parsed.data.mode === "mock_exam" ? result.percent : undefined,
+    readinessScore: progression.readinessScore,
+    pretestCompleted: parsed.data.mode === "pretest" ? true : hasCompletedPretest(viewer.user),
+    userProduct: "ccma",
+  }).catch(() => []);
+
   return NextResponse.json({
     summary: {
       mode: parsed.data.mode,
@@ -136,6 +171,7 @@ export async function POST(request: Request) {
     },
     breakdown: result.domainBreakdown,
     questions: result.results,
+    newAchievements,
     drillComparisons:
       parsed.data.mode === "weak_area_drill"
         ? result.domainBreakdown.map((domain) => {

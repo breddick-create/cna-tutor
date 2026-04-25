@@ -65,6 +65,8 @@ export type TopicState = {
   mastered: boolean; // true only when the student answered correctly
 };
 
+export type SessionPhase = "open" | "core" | "close" | "completed";
+
 export type TutorSessionState = {
   lessonId: string;
   mode: TutorMode;
@@ -83,6 +85,9 @@ export type TutorSessionState = {
   lastStudentMessage: string | null;
   lastTutorMessage: string | null;
   step: TutorStep; // used by API route for DB turn_type logging
+  sessionPhase: SessionPhase;
+  affirmationIndex: number;
+  correctionIndex: number;
 };
 
 export type TutorEvaluation = {

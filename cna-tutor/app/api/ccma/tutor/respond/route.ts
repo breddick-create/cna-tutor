@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import { getCcmaViewer } from "@/lib/ccma/auth/session";
 import { hasCompletedPretest, PRETEST_REQUIRED_MESSAGE } from "@/lib/ccma/onboarding/pretest";
+import { upsertConceptMastery } from "@/lib/learning/concept-mastery";
+import { updateStudyStreak } from "@/lib/learning/streaks";
 import { createClient } from "@/lib/supabase/server";
 import { getTutorLesson } from "@/lib/ccma/tutor/lessons";
 import { parseTutorSessionState, processTutorReply } from "@/lib/ccma/tutor/orchestrator";
@@ -94,6 +96,8 @@ export async function POST(request: Request) {
     .update({
       session_state_json: result.nextState,
       status: nextStatus,
+      phase: result.nextState.sessionPhase,
+      phase_started_at: now,
       ended_at: endedAt,
       last_activity_at: now,
     })
@@ -103,6 +107,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "We couldn't update this lesson." }, { status: 500 });
   }
 
+  const conceptMasteryResult = await upsertConceptMastery(
+    {
+      userId: viewer.user.id,
+      conceptId: `ccma:${result.segmentId}`,
+      lessonId: `ccma:${lesson.id}`,
+      rawScore: result.evaluation.score,
+      bloomLevel: result.bloomLevel,
+    },
+    supabase,
+  ).catch(() => ({ masteryDelta: 0 }));
+
   const { data: tutorTurn, error: tutorTurnError } = await supabase
     .from("ccma_tutor_turns")
     .insert({
@@ -111,6 +126,9 @@ export async function POST(request: Request) {
       turn_type: result.nextState.step,
       content: result.message,
       correctness: result.evaluation.correct ? "correct" : "incorrect",
+      bloom_level: result.bloomLevel,
+      segment_id: result.segmentId,
+      mastery_delta: conceptMasteryResult.masteryDelta,
     })
     .select("*")
     .single();
@@ -125,6 +143,9 @@ export async function POST(request: Request) {
       lesson,
       evaluation: result.evaluation,
     }),
+    result.nextState.sessionComplete
+      ? updateStudyStreak(viewer.user.id, supabase)
+      : Promise.resolve(),
     supabase
       .from("profiles")
       .update({ last_activity_at: now })

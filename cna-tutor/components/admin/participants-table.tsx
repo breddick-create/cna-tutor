@@ -1,3 +1,6 @@
+import { BadgeIcon } from "@/components/badges/badge-icon";
+import { StudentPasswordForm } from "@/components/admin/student-password-form";
+
 function getStatusTone(status: string) {
   if (status === "Exam ready") {
     return "bg-[rgba(23,60,255,0.12)] text-[color:var(--brand-strong)]";
@@ -21,6 +24,11 @@ export function ParticipantsTable({
     id: string;
     name: string;
     email: string;
+    badges?: Array<{
+      slug: string;
+      title: string;
+      iconSlug: string;
+    }>;
     cohort: string;
     statusLabel: string;
     readinessLabel: string;
@@ -57,6 +65,26 @@ export function ParticipantsTable({
                     <p className="font-medium">{row.name}</p>
                     <p className="text-muted mt-1 text-xs">{row.email}</p>
                     <p className="text-muted mt-1 text-xs uppercase tracking-[0.16em]">{row.cohort}</p>
+                    {row.badges?.length ? (
+                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--brand-strong)]">
+                        {row.badges.length} badge{row.badges.length === 1 ? "" : "s"} earned
+                      </p>
+                    ) : null}
+                    {row.badges?.length ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {row.badges.map((badge) => (
+                          <span
+                            key={badge.slug}
+                            className="inline-flex items-center gap-2 rounded-full border border-[rgba(32,77,141,0.12)] bg-[rgba(247,250,255,0.92)] px-2.5 py-1"
+                            title={badge.title}
+                          >
+                            <BadgeIcon className="h-5 w-5" iconSlug={badge.iconSlug} />
+                            <span className="text-[11px] font-semibold">{badge.title}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <StudentPasswordForm studentName={row.name} userId={row.id} />
                   </td>
                   <td className="px-4 py-3">
                     <span

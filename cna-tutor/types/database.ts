@@ -443,6 +443,9 @@ export type Database = {
           turn_type: string;
           content: string;
           correctness: string | null;
+          bloom_level: number | null;
+          segment_id: string | null;
+          mastery_delta: number | null;
           created_at: string;
         };
         Insert: {
@@ -452,6 +455,9 @@ export type Database = {
           turn_type: string;
           content: string;
           correctness?: string | null;
+          bloom_level?: number | null;
+          segment_id?: string | null;
+          mastery_delta?: number | null;
           created_at?: string;
         };
         Update: {
@@ -461,7 +467,145 @@ export type Database = {
           turn_type?: string;
           content?: string;
           correctness?: string | null;
+          bloom_level?: number | null;
+          segment_id?: string | null;
+          mastery_delta?: number | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      concept_mastery: {
+        Row: {
+          id: string;
+          user_id: string;
+          concept_id: string;
+          lesson_id: string;
+          interval: number;
+          ease_factor: number;
+          repetitions: number;
+          next_review_at: string;
+          mastery_score: number;
+          last_score: number;
+          bloom_level: number;
+          last_seen_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          concept_id: string;
+          lesson_id: string;
+          interval?: number;
+          ease_factor?: number;
+          repetitions?: number;
+          next_review_at?: string;
+          mastery_score?: number;
+          last_score?: number;
+          bloom_level?: number;
+          last_seen_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          concept_id?: string;
+          lesson_id?: string;
+          interval?: number;
+          ease_factor?: number;
+          repetitions?: number;
+          next_review_at?: string;
+          mastery_score?: number;
+          last_score?: number;
+          bloom_level?: number;
+          last_seen_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      study_streaks: {
+        Row: {
+          user_id: string;
+          current_streak: number;
+          longest_streak: number;
+          last_study_date: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          current_streak?: number;
+          longest_streak?: number;
+          last_study_date?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          current_streak?: number;
+          longest_streak?: number;
+          last_study_date?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      achievement_definitions: {
+        Row: {
+          id: string;
+          slug: string;
+          title: string;
+          description: string;
+          criteria_json: Record<string, unknown>;
+          category: string;
+          icon_slug: string;
+          product: string | null;
+          domain_slug: string | null;
+          unlock_condition_text: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          title: string;
+          description: string;
+          criteria_json?: Record<string, unknown>;
+          category?: string;
+          icon_slug?: string;
+          product?: string | null;
+          domain_slug?: string | null;
+          unlock_condition_text?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          title?: string;
+          description?: string;
+          criteria_json?: Record<string, unknown>;
+          category?: string;
+          icon_slug?: string;
+          product?: string | null;
+          domain_slug?: string | null;
+          unlock_condition_text?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      student_achievements: {
+        Row: {
+          user_id: string;
+          achievement_id: string;
+          earned_at: string;
+        };
+        Insert: {
+          user_id: string;
+          achievement_id: string;
+          earned_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          achievement_id?: string;
+          earned_at?: string;
         };
         Relationships: [];
       };

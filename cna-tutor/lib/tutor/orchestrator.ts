@@ -2,8 +2,11 @@ import type { SupportedLanguage } from "@/lib/i18n/languages";
 import { buildTutorSystemPrompt } from "@/lib/tutor/prompts";
 import { getTutorLesson, resolveLessonMode } from "@/lib/tutor/lessons";
 import { DEFAULT_TUTOR_MODEL, getOpenAIClient } from "@/lib/tutor/openai";
+import { nextIndex, selectAffirmation, selectCorrection, AFFIRMATIONS, CORRECTIONS } from "@/lib/tutor/feedback-library";
 import type {
+  LessonQuestionType,
   LessonSegment,
+  SessionPhase,
   TopicState,
   TutorEvaluation,
   TutorLesson,
@@ -21,6 +24,27 @@ function normalizeText(s: string) {
 
 function getWords(s: string) {
   return normalizeText(s).split(/\s+/).filter(Boolean);
+}
+
+// ─── Bloom's level inference ───────────────────────────────────────────────
+
+function inferBloomLevel(questionType: LessonQuestionType | undefined): number {
+  switch (questionType) {
+    case "recall":            return 1;
+    case "application":       return 3;
+    case "scenario":          return 4;
+    case "critical_thinking": return 5;
+    case "misconception":     return 3;
+    case "summary":           return 2;
+    default:                  return 2;
+  }
+}
+
+function deriveSessionPhase(topicIndex: number, totalTopics: number, complete: boolean): SessionPhase {
+  if (complete) return "completed";
+  if (topicIndex === 0) return "open";
+  if (topicIndex >= totalTopics - 1) return "close";
+  return "core";
 }
 
 // ─── Grading ───────────────────────────────────────────────────────────────
@@ -144,6 +168,9 @@ export function createInitialTutorSessionState(
     lastStudentMessage: null,
     lastTutorMessage: null,
     step: "intro",
+    sessionPhase: "open",
+    affirmationIndex: 0,
+    correctionIndex: 0,
   };
 }
 
@@ -176,12 +203,16 @@ export function parseTutorSessionState(
     };
   }
 
+  const currentTopicIndex = (raw.currentTopicIndex as number) ?? 0;
+  const topics = raw.topics as TopicState[];
+  const sessionComplete = (raw.sessionComplete as boolean) ?? false;
+
   return {
     lessonId: raw.lessonId as string,
     mode: modeOverride ?? (raw.mode as TutorMode),
     preferredLanguage: (raw.preferredLanguage as SupportedLanguage) ?? "en",
-    topics: raw.topics as TopicState[],
-    currentTopicIndex: (raw.currentTopicIndex as number) ?? 0,
+    topics,
+    currentTopicIndex,
     currentTopicAttempts: (raw.currentTopicAttempts as number) ?? 0,
     awaitingAnswer: (raw.awaitingAnswer as boolean) ?? false,
     tutorLastGaveAnswer: (raw.tutorLastGaveAnswer as boolean) ?? false,
@@ -190,10 +221,13 @@ export function parseTutorSessionState(
     weakAreasSnapshot: Array.isArray(raw.weakAreasSnapshot)
       ? (raw.weakAreasSnapshot as string[])
       : [],
-    sessionComplete: (raw.sessionComplete as boolean) ?? false,
+    sessionComplete,
     lastStudentMessage: (raw.lastStudentMessage as string | null) ?? null,
     lastTutorMessage: (raw.lastTutorMessage as string | null) ?? null,
     step: (raw.step as TutorSessionState["step"]) ?? "teach",
+    sessionPhase: (raw.sessionPhase as SessionPhase) ?? deriveSessionPhase(currentTopicIndex, topics.length, sessionComplete),
+    affirmationIndex: (raw.affirmationIndex as number) ?? 0,
+    correctionIndex: (raw.correctionIndex as number) ?? 0,
   };
 }
 
@@ -214,6 +248,8 @@ type MessageArgs = {
   masteredTitles: string[];
   struggledTitles: string[];
   state: TutorSessionState;
+  affirmationPhrase: string;
+  correctionPhrase: string;
 };
 
 function buildPrompt(args: MessageArgs): string {
@@ -221,6 +257,7 @@ function buildPrompt(args: MessageArgs): string {
     action, lesson, currentSegment, nextSegment,
     topicNumber, totalTopics, attemptNumber,
     evaluation, studentMessage, masteredTitles, struggledTitles, state,
+    affirmationPhrase, correctionPhrase,
   } = args;
 
   const lines: string[] = [];
@@ -240,7 +277,7 @@ function buildPrompt(args: MessageArgs): string {
     case "correct":
       if (nextSegment) {
         lines.push(
-          `ACTION: Student answered correctly. Confirm it in one sentence using the explanation below.`,
+          `ACTION: Student answered correctly. Open with this affirmation (use it naturally, don't repeat verbatim): "${affirmationPhrase}"`,
           `EXPLANATION: ${evaluation?.correctExplanation ?? currentSegment.correctExplanation}`,
           `TRANSITION (say this out loud): "Good — now let's move on to topic ${topicNumber + 1} of ${totalTopics}: ${nextSegment.title}."`,
           `NEXT CONCEPT: ${nextSegment.concept}`,
@@ -251,6 +288,7 @@ function buildPrompt(args: MessageArgs): string {
       } else {
         lines.push(
           `ACTION: Student answered the final topic correctly. Lesson complete.`,
+          `Open with this affirmation (use it naturally): "${affirmationPhrase}"`,
           `EXPLANATION: ${evaluation?.correctExplanation ?? currentSegment.correctExplanation}`,
           `Give a 2-3 sentence summary of the lesson.`,
           masteredTitles.length > 0 ? `Topics mastered: ${masteredTitles.join(", ")}.` : "",
@@ -265,7 +303,7 @@ function buildPrompt(args: MessageArgs): string {
     case "incorrect":
       if (attemptNumber === 1) {
         lines.push(
-          `ACTION: Student answered incorrectly on attempt 1. Explain why, then ask again.`,
+          `ACTION: Student answered incorrectly on attempt 1. Open with this corrective phrase (use it naturally): "${correctionPhrase}"`,
           `TOPIC ${topicNumber} OF ${totalTopics}: "${currentSegment.title}"`,
           `STUDENT SAID: "${studentMessage ?? ""}"`,
           `WHY IT WAS WRONG: ${evaluation?.incorrectExplanation ?? currentSegment.incorrectExplanation}`,
@@ -275,7 +313,7 @@ function buildPrompt(args: MessageArgs): string {
         );
       } else {
         lines.push(
-          `ACTION: Student answered incorrectly on attempt ${attemptNumber}. State the answer directly, then ask one more time.`,
+          `ACTION: Student answered incorrectly on attempt ${attemptNumber}. Open with: "${correctionPhrase}" then state the answer directly.`,
           `TOPIC ${topicNumber} OF ${totalTopics}: "${currentSegment.title}"`,
           `STUDENT SAID: "${studentMessage ?? ""}"`,
           `STATE THIS ANSWER EXPLICITLY: "${currentSegment.idealAnswer}"`,
@@ -330,6 +368,7 @@ function buildPrompt(args: MessageArgs): string {
     `LESSON: ${lesson.title}`,
     `LESSON GOAL: ${lesson.learningGoal}`,
     `TUTORING MODE: ${state.mode}`,
+    `SESSION PHASE: ${state.sessionPhase} (open=orientation, core=main teaching, close=wrap-up)`,
     `LANGUAGE: ${state.preferredLanguage}`,
     `Output: keep it under 200 words. Sound like a warm CNA instructor. No bullet walls.`,
   );
@@ -413,6 +452,7 @@ async function generateMessage(args: MessageArgs): Promise<string> {
           topic: args.lesson.title,
           weakAreas: args.state.weakAreasSnapshot,
           preferredLanguage: args.state.preferredLanguage,
+          sessionPhase: args.state.sessionPhase,
         }),
         input: buildPrompt(args),
         store: false,
@@ -467,6 +507,8 @@ export async function buildInitialTutorTurnForMode(args: {
     masteredTitles: [],
     struggledTitles: [],
     state,
+    affirmationPhrase: selectAffirmation(state.affirmationIndex),
+    correctionPhrase: selectCorrection(state.correctionIndex),
   });
 
   return {
@@ -563,6 +605,13 @@ export async function processTutorReply(args: {
 
   // ── 5. Generate message ───────────────────────────────────────────────────
 
+  const nextAffirmationIndex = correct
+    ? nextIndex(state.affirmationIndex, AFFIRMATIONS.length)
+    : state.affirmationIndex;
+  const nextCorrectionIndex = !correct
+    ? nextIndex(state.correctionIndex, CORRECTIONS.length)
+    : state.correctionIndex;
+
   const message = await generateMessage({
     action,
     lesson,
@@ -576,6 +625,8 @@ export async function processTutorReply(args: {
     masteredTitles,
     struggledTitles,
     state: { ...state, currentTopicAttempts: newAttempts },
+    affirmationPhrase: selectAffirmation(state.affirmationIndex),
+    correctionPhrase: selectCorrection(state.correctionIndex),
   });
 
   // ── 6. Build next state ───────────────────────────────────────────────────
@@ -588,6 +639,8 @@ export async function processTutorReply(args: {
     !advance &&
     (newAttempts >= 2 ||
       semanticOverlap(message, currentSegment.idealAnswer) >= 0.5);
+
+  const nextPhase = deriveSessionPhase(nextTopicIndex, totalTopics, sessionComplete);
 
   const nextState: TutorSessionState = {
     ...state,
@@ -602,7 +655,12 @@ export async function processTutorReply(args: {
     lastStudentMessage: studentMessage,
     lastTutorMessage: message,
     step,
+    sessionPhase: nextPhase,
+    affirmationIndex: nextAffirmationIndex,
+    correctionIndex: nextCorrectionIndex,
   };
 
-  return { lesson, evaluation, nextState, message };
+  const bloomLevel = inferBloomLevel(currentSegment.questionType);
+
+  return { lesson, evaluation, nextState, message, bloomLevel, segmentId: currentSegment.id };
 }

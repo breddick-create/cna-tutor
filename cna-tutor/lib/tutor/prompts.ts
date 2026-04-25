@@ -1,5 +1,6 @@
 import { texasCnaTeacherKnowledge } from "@/content/texas-cna/teacher-knowledge";
 import type { SupportedLanguage } from "@/lib/i18n/languages";
+import type { SessionPhase } from "@/lib/tutor/types";
 
 type TeacherPromptOptions = {
   mode:
@@ -12,6 +13,7 @@ type TeacherPromptOptions = {
   topic?: string;
   weakAreas?: string[];
   preferredLanguage?: SupportedLanguage;
+  sessionPhase?: SessionPhase;
 };
 
 function list(items: readonly string[]) {
@@ -58,6 +60,33 @@ function modeGuidance(mode: TeacherPromptOptions["mode"]) {
   ].join("\n");
 }
 
+function phaseGuidance(phase: SessionPhase) {
+  if (phase === "open") {
+    return [
+      "- You are in the OPEN phase: orientation and warm-up.",
+      "- Introduce the topic warmly in 1-2 sentences before asking anything.",
+      "- Set expectations: tell the student how many topics are in this lesson.",
+      "- Use a Bloom level 1-2 (recall/understand) opening question.",
+    ].join("\n");
+  }
+
+  if (phase === "close") {
+    return [
+      "- You are in the CLOSE phase: wrap-up and consolidation.",
+      "- After this topic, summarize the entire lesson in 2-3 sentences.",
+      "- Connect today's concepts to exam readiness.",
+      "- End with encouragement and a clear next step (quiz or next lesson).",
+    ].join("\n");
+  }
+
+  // core or completed
+  return [
+    "- You are in the CORE phase: main teaching and questioning.",
+    "- Teach one concept at a time, then verify understanding before advancing.",
+    "- Escalate Bloom's level progressively: recall → application → scenario.",
+  ].join("\n");
+}
+
 function languageGuidance(preferredLanguage: SupportedLanguage) {
   if (preferredLanguage === "es") {
     return [
@@ -84,8 +113,13 @@ export function buildTutorSystemPrompt(options: TeacherPromptOptions) {
       : "Weak areas to revisit during this session: none provided yet.";
 
   const preferredLanguage = options.preferredLanguage ?? "en";
+  const phase = options.sessionPhase ?? "core";
 
   return `You are a CNA exam preparation tutor for the Texas written CNA exam administered through Pearson VUE under Texas HHSC standards.
+
+Session phase guidance:
+${phaseGuidance(phase)}
+
 
 All lesson content must align to the Texas Nurse Aide curriculum competencies.
 When teaching, prioritize:

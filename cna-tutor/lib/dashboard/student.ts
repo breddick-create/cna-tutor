@@ -1,4 +1,5 @@
 import type { PretestDomainBreakdown } from "@/lib/onboarding/pretest";
+import { getBadgesForProduct } from "@/lib/learning/badge-definitions";
 import { createClient } from "@/lib/supabase/server";
 import { getTutorLesson } from "@/lib/tutor/lessons";
 import { parseTutorSessionState } from "@/lib/tutor/orchestrator";
@@ -302,6 +303,9 @@ export async function getStudentDashboard(args: {
     { data: rawTutorSessions },
     { data: profileRow },
     { data: confidenceEvents },
+    { data: streakRow },
+    { data: achievementDefinitions },
+    { data: earnedAchievements },
   ] = await Promise.all([
     supabase
       .from("quiz_attempts")
@@ -325,7 +329,7 @@ export async function getStudentDashboard(args: {
       .limit(6),
     supabase
       .from("profiles")
-      .select("last_activity_at")
+      .select("last_activity_at, product")
       .eq("id", args.userId)
       .single(),
     supabase
@@ -335,6 +339,20 @@ export async function getStudentDashboard(args: {
       .in("event_type", ["quiz_completed", "weak_area_drill_completed"])
       .order("occurred_at", { ascending: false })
       .limit(12),
+    supabase
+      .from("study_streaks")
+      .select("current_streak, longest_streak")
+      .eq("user_id", args.userId)
+      .maybeSingle(),
+    supabase
+      .from("achievement_definitions")
+      .select("slug, title, description, category, icon_slug, product, domain_slug, unlock_condition_text")
+      .order("title", { ascending: true }),
+    supabase
+      .from("student_achievements")
+      .select("earned_at, achievement_definitions!inner(slug, title, description, category, icon_slug, product, domain_slug, unlock_condition_text)")
+      .eq("user_id", args.userId)
+      .order("earned_at", { ascending: false }),
   ]);
 
   const quizAttempts = rawQuizAttempts ?? [];
@@ -425,10 +443,60 @@ export async function getStudentDashboard(args: {
             ctaHref: progression.nextBestTask.href,
           };
   const inactive = isInactive(profileRow?.last_activity_at ?? null);
+  const product = profileRow?.product ?? "cna";
+  const fallbackDefinitions = getBadgesForProduct(product);
+  const allBadges =
+    (achievementDefinitions ?? [])
+      .filter((badge) => !badge.product || badge.product === product)
+      .map((badge) => ({
+        slug: badge.slug,
+        title: badge.title,
+        description: badge.description,
+        category: badge.category,
+        iconSlug: badge.icon_slug,
+        unlockConditionText: badge.unlock_condition_text,
+        domainSlug: badge.domain_slug ?? undefined,
+      })) || [];
+  const badgeCatalog = allBadges.length
+    ? allBadges
+    : fallbackDefinitions.map((badge) => ({
+        ...badge,
+        iconSlug: badge.iconSlug,
+      }));
+  const earnedBadgeRows =
+    (earnedAchievements ?? []).map((row) => {
+      const badge = Array.isArray(row.achievement_definitions)
+        ? row.achievement_definitions[0]
+        : row.achievement_definitions;
+
+      return {
+        slug: badge.slug,
+        title: badge.title,
+        description: badge.description,
+        category: badge.category,
+        iconSlug: badge.icon_slug,
+        unlockConditionText: badge.unlock_condition_text,
+        earnedAt: row.earned_at,
+      };
+    }) ?? [];
+  const earnedBadgeSlugs = new Set(earnedBadgeRows.map((badge) => badge.slug));
+  const badgeProgress = badgeCatalog.map((badge) => ({
+    ...badge,
+    earned: earnedBadgeSlugs.has(badge.slug),
+    earnedAt: earnedBadgeRows.find((earnedBadge) => earnedBadge.slug === badge.slug)?.earnedAt ?? null,
+  }));
 
   return {
     progression,
     isInactive: inactive,
+    streak: {
+      current: streakRow?.current_streak ?? 0,
+      longest: streakRow?.longest_streak ?? 0,
+    },
+    badges: {
+      earned: earnedBadgeRows,
+      all: badgeProgress,
+    },
     nextStep,
     recoveryPlan,
     weakAreas: progression.weakAreas.map((area) => ({

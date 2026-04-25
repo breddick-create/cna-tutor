@@ -2,7 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getViewer } from "@/lib/auth/session";
-import { hasCompletedPretest, PRETEST_REQUIRED_MESSAGE } from "@/lib/onboarding/pretest";
+import { evaluateBadges } from "@/lib/learning/badge-evaluator";
+import { upsertConceptMastery } from "@/lib/learning/concept-mastery";
+import { updateStudyStreak } from "@/lib/learning/streaks";
+import {
+  getPretestDomainBreakdown,
+  getPretestScore,
+  hasCompletedPretest,
+  PRETEST_REQUIRED_MESSAGE,
+} from "@/lib/onboarding/pretest";
+import { getStudentProgressionSnapshot } from "@/lib/progression/student";
 import { createClient } from "@/lib/supabase/server";
 import { getTutorLesson } from "@/lib/tutor/lessons";
 import { parseTutorSessionState, processTutorReply } from "@/lib/tutor/orchestrator";
@@ -101,6 +110,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "We couldn't update this lesson." }, { status: 500 });
   }
 
+  const conceptMasteryResult = await upsertConceptMastery(
+    {
+      userId: viewer.user.id,
+      conceptId: result.segmentId,
+      lessonId: lesson.id,
+      rawScore: result.evaluation.score,
+      bloomLevel: result.bloomLevel,
+    },
+    supabase,
+  ).catch(() => ({ masteryDelta: 0 }));
+
   const { data: tutorTurn, error: tutorTurnError } = await supabase
     .from("tutor_turns")
     .insert({
@@ -109,6 +129,9 @@ export async function POST(request: Request) {
       turn_type: result.nextState.step,
       content: result.message,
       correctness: result.evaluation.correct ? "correct" : "incorrect",
+      bloom_level: result.bloomLevel,
+      segment_id: result.segmentId,
+      mastery_delta: conceptMasteryResult.masteryDelta,
     })
     .select("*")
     .single();
@@ -130,15 +153,43 @@ export async function POST(request: Request) {
     markLessonCompleted: result.nextState.sessionComplete,
   });
 
-  await Promise.allSettled([
-    updateDomainMastery({
+  const daysSinceLastStudy = viewer.profile.last_activity_at
+    ? Math.floor((Date.now() - new Date(viewer.profile.last_activity_at).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  await updateDomainMastery({
+    userId: viewer.user.id,
+    lesson,
+    evaluation: result.evaluation,
+  }).catch(() => undefined);
+
+  let newAchievements: Array<{ slug: string; title: string; description: string }> = [];
+
+  if (result.nextState.sessionComplete) {
+    const streak = await updateStudyStreak(viewer.user.id, supabase).catch(() => null);
+    const progression = await getStudentProgressionSnapshot({
       userId: viewer.user.id,
-      lesson,
-      evaluation: result.evaluation,
-    }),
-  ]);
+      pretestScore: getPretestScore(viewer.user),
+      pretestDomainBreakdown: getPretestDomainBreakdown(viewer.user),
+    }).catch(() => null);
+
+    newAchievements = await evaluateBadges({
+      userId: viewer.user.id,
+      trigger: "session_complete",
+      supabase,
+      sessionId: session.id,
+      sessionMasteryScore: result.nextState.masteryScore,
+      sessionDurationSeconds: tracking.activeSeconds,
+      sessionDomainSlug: lesson.domainSlug,
+      readinessScore: progression?.readinessScore,
+      currentStreak: streak?.currentStreak,
+      pretestCompleted: hasCompletedPretest(viewer.user),
+      daysSinceLastStudy: daysSinceLastStudy ?? undefined,
+      userProduct: viewer.profile.product,
+    }).catch(() => []);
+  }
 
   return NextResponse.json({
+    newAchievements,
     studentTurn: {
       actor: "student",
       content: parsed.data.message,

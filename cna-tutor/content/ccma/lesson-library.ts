@@ -329,68 +329,6 @@ function conceptLabels(segment: LessonSegment) {
   return segment.acceptableConcepts.map((concept) => concept.label).join(", ");
 }
 
-function strengthenExplanation(segment: LessonSegment) {
-  return `${segment.incorrectExplanation} To move forward, your answer needs to directly show: ${conceptLabels(segment)}.`;
-}
-
-function buildMasterySegments(lesson: TutorLesson, segment: LessonSegment): LessonSegment[] {
-  const requiredConcepts = conceptLabels(segment);
-  const misconception = segment.incorrectExplanation.replace(/\.$/, "");
-
-  return [
-    {
-      ...segment,
-      questionType: "recall",
-      difficulty: 1,
-      incorrectExplanation: strengthenExplanation(segment),
-    },
-    {
-      ...segment,
-      id: `${segment.id}-apply`,
-      title: `${segment.title}: Apply it`,
-      questionType: "application",
-      difficulty: 2,
-      question: `In your own words, how would a medical assistant apply this in a clinic: ${segment.idealAnswer}`,
-      idealAnswer: `Apply it by taking the correct CMA action: ${segment.idealAnswer}`,
-      correctExplanation: "Correct. You connected the rule to what a medical assistant should actually do.",
-      incorrectExplanation: `Not yet. This answer has to apply the action, not just name the topic. Include: ${requiredConcepts}.`,
-    },
-    {
-      ...segment,
-      id: `${segment.id}-scenario`,
-      title: `${segment.title}: Scenario judgment`,
-      questionType: "scenario",
-      difficulty: 2,
-      question: `A patient presents with a situation that tests this exact idea. What should the medical assistant do first, and why?`,
-      idealAnswer: `${segment.idealAnswer} The reason is that it supports patient safety, accuracy, privacy, and CMA scope of practice.`,
-      correctExplanation: "Right. You identified the safe first action and the reason behind it.",
-      incorrectExplanation: `Not quite. The scenario answer must name the correct first action and why it matters. Include: ${requiredConcepts}.`,
-    },
-    {
-      ...segment,
-      id: `${segment.id}-misconception`,
-      title: `${segment.title}: Common misconception`,
-      questionType: "misconception",
-      difficulty: 2,
-      question: `A common mistake is thinking, "${misconception}." What is the corrected medical assistant action?`,
-      idealAnswer: segment.idealAnswer,
-      correctExplanation: "Correct. You corrected the misconception with the safer CMA action.",
-      incorrectExplanation: `That still leaves the misconception in place. Correct it clearly by including: ${requiredConcepts}.`,
-    },
-    {
-      ...segment,
-      id: `${segment.id}-challenge`,
-      title: `${segment.title}: Exam reasoning`,
-      questionType: "critical_thinking",
-      difficulty: 3,
-      question: `On the NHA CCMA exam, what words or clues would tell you this is the correct answer instead of a distractor?`,
-      idealAnswer: `The clues point back to: ${segment.idealAnswer}`,
-      correctExplanation: "Good exam reasoning. You connected the clue words to the safest CMA response.",
-      incorrectExplanation: `This needs stronger exam reasoning. Name the clue and connect it to: ${requiredConcepts}.`,
-    },
-  ];
-}
-
 function buildSummarySegment(lesson: TutorLesson): LessonSegment {
   const coreConcepts = lesson.segments
     .flatMap((segment) => segment.acceptableConcepts.map((concept) => concept.label))
@@ -417,16 +355,18 @@ function buildSummarySegment(lesson: TutorLesson): LessonSegment {
 }
 
 function enrichLesson(lesson: TutorLesson): TutorLesson {
-  const expandedSegments = lesson.segments.flatMap((segment) =>
-    buildMasterySegments(lesson, segment),
-  );
-  const masterySegments = expandedSegments.slice(0, 9);
+  const baseSegments = lesson.segments.map((segment) => ({
+    ...segment,
+    questionType: segment.questionType ?? "recall",
+    difficulty: segment.difficulty ?? 1,
+    incorrectExplanation: `${segment.incorrectExplanation} To move forward, your answer needs to directly show: ${conceptLabels(segment)}.`,
+  }));
 
   return {
     ...lesson,
-    estimatedMinutes: Math.max(lesson.estimatedMinutes, 40),
+    estimatedMinutes: Math.max(lesson.estimatedMinutes, 15),
     completionMessage: `${lesson.completionMessage} Recap the safe first action, the reason it matters, and the CMA scope boundary before moving on.`,
-    segments: [...masterySegments, buildSummarySegment(lesson)],
+    segments: [...baseSegments, buildSummarySegment(lesson)],
   };
 }
 

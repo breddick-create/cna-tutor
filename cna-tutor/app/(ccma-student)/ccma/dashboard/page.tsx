@@ -4,7 +4,9 @@ import type { ReactNode } from "react";
 
 import { updateCcmaLanguagePreferenceAction } from "@/app/ccma/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { ReadinessRing } from "@/components/dashboard/readiness-ring";
 import { ProgressBar } from "@/components/dashboard/progress-bar";
+import { StreakBadge } from "@/components/dashboard/streak-badge";
 import { TrendLine } from "@/components/dashboard/trend-line";
 import { CcmaReadinessChecklist } from "@/components/ccma/readiness-checklist";
 import { StudentEmptyState } from "@/components/student/student-empty-state";
@@ -358,9 +360,16 @@ export default async function StudentDashboardPage({
           title={text("Your readiness score", "Tu puntaje de preparacion")}
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-5xl font-semibold">{dashboard.progression.readinessScore}%</p>
-              <p className="mt-2 text-lg font-semibold">{dashboard.progression.readinessLabel}</p>
+            <div className="flex items-center gap-5">
+              <ReadinessRing
+                label={text("Exam readiness", "Preparacion para el examen")}
+                size={126}
+                value={dashboard.progression.readinessScore}
+              />
+              <div>
+                <p className="text-5xl font-semibold">{dashboard.progression.readinessScore}%</p>
+                <p className="mt-2 text-lg font-semibold">{dashboard.progression.readinessLabel}</p>
+              </div>
             </div>
             <span
               className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${readinessTone}`}
@@ -396,6 +405,13 @@ export default async function StudentDashboardPage({
                   ? `${dashboard.practiceExamStatus.bestScore}%`
                   : text("Not yet", "Todavia no")
               }
+            />
+          </div>
+
+          <div className="mt-5">
+            <StreakBadge
+              currentStreak={dashboard.streak.current}
+              longestStreak={dashboard.streak.longest}
             />
           </div>
         </DashboardSection>

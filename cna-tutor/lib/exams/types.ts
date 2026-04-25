@@ -63,6 +63,11 @@ export type AssessmentResultPayload = {
   summary: AssessmentResultSummary;
   breakdown: AssessmentResultBreakdown[];
   questions: ExamResultQuestion[];
+  newAchievements?: Array<{
+    slug: string;
+    title: string;
+    description: string;
+  }>;
   drillComparisons?: Array<{
     domainSlug: string;
     domainTitle: string;

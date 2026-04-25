@@ -41,6 +41,11 @@ type OversightStudentRow = {
   id: string;
   name: string;
   email: string;
+  badges: Array<{
+    slug: string;
+    title: string;
+    iconSlug: string;
+  }>;
   cohort: string;
   pretestCompleted: boolean;
   status: StudentStatus;
@@ -253,6 +258,7 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
     { data: quizRows },
     { data: mockRows },
     { data: confidenceEvents },
+    { data: earnedBadges },
   ] = await Promise.all(
     studentIds.length
       ? [
@@ -282,8 +288,12 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
             .select("user_id, metadata_json, occurred_at")
             .in("user_id", studentIds)
             .in("event_type", ["quiz_completed", "weak_area_drill_completed"]),
+          supabase
+            .from("student_achievements")
+            .select("user_id, achievement_definitions!inner(slug, title, icon_slug)")
+            .in("user_id", studentIds),
         ]
-      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }],
+      : [{ data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }, { data: [] }],
   );
 
   const domainIds = Array.from(
@@ -409,6 +419,24 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
     quizzesByUser.set(row.user_id, current);
   }
 
+  const badgesByUser = new Map<
+    string,
+    Array<{ slug: string; title: string; iconSlug: string }>
+  >();
+
+  for (const row of earnedBadges ?? []) {
+    const definition = Array.isArray(row.achievement_definitions)
+      ? row.achievement_definitions[0]
+      : row.achievement_definitions;
+    const current = badgesByUser.get(row.user_id) ?? [];
+    current.push({
+      slug: definition.slug,
+      title: definition.title,
+      iconSlug: definition.icon_slug,
+    });
+    badgesByUser.set(row.user_id, current);
+  }
+
   const mocksByUser = new Map<
     string,
     Array<{ id: string; percent: number; passed: boolean; completedAt: string | null }>
@@ -473,6 +501,7 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
         id: student.id,
         name: student.full_name,
         email: student.email,
+        badges: badgesByUser.get(student.id)?.slice(0, 4) ?? [],
         cohort: student.cohort ?? "Unassigned",
         pretestCompleted,
         status: statusMeta.status,

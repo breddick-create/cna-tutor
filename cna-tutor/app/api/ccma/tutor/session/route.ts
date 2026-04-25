@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
   const supabase = (await createClient()) as any;
 
-  const [progression, { data: studySessions }] = await Promise.all([
+  const [progression, { data: studySessions }, { data: weakAreaRows }] = await Promise.all([
     getStudentProgressionSnapshot({
       userId: viewer.user.id,
       pretestScore: getPretestScore(viewer.user),
@@ -66,7 +66,18 @@ export async function POST(request: Request) {
       .from("ccma_tutor_sessions")
       .select("status, session_state_json")
       .eq("user_id", viewer.user.id),
+    supabase
+      .from("ccma_student_progress")
+      .select("domain_title, mastery_score, weak_streak")
+      .eq("user_id", viewer.user.id)
+      .order("mastery_score", { ascending: true })
+      .limit(3),
   ]);
+
+  const weakAreasSnapshot = (weakAreaRows ?? [])
+    .filter((row: any) => row.mastery_score < 75 || row.weak_streak > 0)
+    .map((row: any) => row.domain_title)
+    .filter((title: unknown): title is string => typeof title === "string" && title.length > 0);
 
   const studyPath = buildGuidedStudyPath({
     progression,
@@ -88,7 +99,7 @@ export async function POST(request: Request) {
   const initialTurn = await buildInitialTutorTurnForMode({
     lessonId: parsed.data.lessonId,
     mode: parsed.data.mode as TutorMode | undefined,
-    weakAreasSnapshot: [],
+    weakAreasSnapshot,
     preferredLanguage: resolvePreferredLanguage(viewer.profile.preferred_language),
   });
 
@@ -98,6 +109,9 @@ export async function POST(request: Request) {
       user_id: viewer.user.id,
       mode: initialTurn.state.mode,
       status: "active",
+      phase: initialTurn.state.sessionPhase,
+      phase_started_at: new Date().toISOString(),
+      bloom_target: 2,
       session_state_json: initialTurn.state,
     })
     .select("*")

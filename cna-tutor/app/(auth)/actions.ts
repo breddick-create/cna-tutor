@@ -16,6 +16,10 @@ import {
 import { resolveAppUrl } from "@/lib/app-url";
 import { env } from "@/lib/env";
 import { resolvePreferredLanguage } from "@/lib/i18n/languages";
+import { evaluateBadges } from "@/lib/learning/badge-evaluator";
+import { appendEarnedBadgesParam } from "@/lib/learning/badge-query";
+import { getPretestDomainBreakdown, getPretestScore, hasCompletedPretest } from "@/lib/onboarding/pretest";
+import { getStudentProgressionSnapshot } from "@/lib/progression/student";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -143,8 +147,21 @@ export async function signInAction(formData: FormData) {
       user,
       userId: user.id,
     });
+    const progression = await getStudentProgressionSnapshot({
+      userId: user.id,
+      pretestScore: getPretestScore(user),
+      pretestDomainBreakdown: getPretestDomainBreakdown(user),
+    });
+    const loginBadges = await evaluateBadges({
+      userId: user.id,
+      trigger: "login",
+      supabase,
+      readinessScore: progression.readinessScore,
+      pretestCompleted: hasCompletedPretest(user),
+      userProduct: effectiveProduct,
+    }).catch(() => []);
 
-    redirect(redirectPath);
+    redirect(appendEarnedBadgesParam(redirectPath, loginBadges.map((badge) => ({ slug: badge.slug }))));
   }
 
   redirect("/");

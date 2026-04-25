@@ -104,6 +104,7 @@ export async function getCcmaAdminDashboard(filters: CcmaAdminDashboardFilters =
     { data: progressRows },
     { data: quizRows },
     { data: assessmentRows },
+    { data: earnedBadges },
   ] = await Promise.all([
     studentIds.length
       ? supabase.from("ccma_student_progress").select("*").in("user_id", studentIds)
@@ -113,6 +114,12 @@ export async function getCcmaAdminDashboard(filters: CcmaAdminDashboardFilters =
       : Promise.resolve({ data: [] as any[] }),
     studentIds.length
       ? supabase.from("ccma_assessments").select("*").in("user_id", studentIds)
+      : Promise.resolve({ data: [] as any[] }),
+    studentIds.length
+      ? supabase
+          .from("student_achievements")
+          .select("user_id, achievement_definitions!inner(slug, title, icon_slug)")
+          .in("user_id", studentIds)
       : Promise.resolve({ data: [] as any[] }),
   ]);
 
@@ -135,6 +142,20 @@ export async function getCcmaAdminDashboard(filters: CcmaAdminDashboardFilters =
     const current = assessmentsByUser.get(row.user_id) ?? [];
     current.push(row);
     assessmentsByUser.set(row.user_id, current);
+  }
+
+  const badgesByUser = new Map<string, Array<{ slug: string; title: string; iconSlug: string }>>();
+  for (const row of earnedBadges ?? []) {
+    const definition = Array.isArray(row.achievement_definitions)
+      ? row.achievement_definitions[0]
+      : row.achievement_definitions;
+    const current = badgesByUser.get(row.user_id) ?? [];
+    current.push({
+      slug: definition.slug,
+      title: definition.title,
+      iconSlug: definition.icon_slug,
+    });
+    badgesByUser.set(row.user_id, current);
   }
 
   const reportRows = studentRows.map((student: any) => {
@@ -215,6 +236,7 @@ export async function getCcmaAdminDashboard(filters: CcmaAdminDashboardFilters =
       id: student.id,
       name: student.full_name,
       email: student.email,
+      badges: badgesByUser.get(student.id)?.slice(0, 4) ?? [],
       cohort: student.cohort ?? "Unassigned",
       pretestCompleted,
       status,
