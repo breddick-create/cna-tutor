@@ -11,7 +11,9 @@ export type TutorStep =
   | "wrap"
   | "completed"
   | "synthesis_prompt"
-  | "synthesis_ack";
+  | "synthesis_ack"
+  | "open_review"
+  | "review_ack";
 
 export type LessonConceptMatch = {
   label: string;
@@ -95,6 +97,7 @@ export type TutorSessionState = {
   topicsSinceSynthesis: number; // increments per topic taught; triggers synthesis check-in at 2
   synthesisMode: boolean;        // true when awaiting student synthesis response
   priorLessonTitle: string | null; // "where you left off" — shown in opening recap
+  openReviewMode: boolean;       // true when session opens with a spaced retrieval warm-up
 };
 
 export type TutorEvaluation = {

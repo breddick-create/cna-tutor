@@ -1,6 +1,7 @@
 import type { SupportedLanguage } from "@/lib/ccma/i18n/languages";
 import { buildTutorSystemPrompt } from "@/lib/ccma/tutor/prompts";
 import { getTutorLesson, resolveLessonMode } from "@/lib/ccma/tutor/lessons";
+import type { SpacedReviewConcept } from "@/lib/learning/spaced-review";
 import { DEFAULT_TUTOR_MODEL, getOpenAIClient } from "@/lib/ccma/tutor/openai";
 import {
   AFFIRMATIONS,
@@ -251,6 +252,7 @@ export function createInitialTutorSessionState(
   weakAreasSnapshot: string[] = [],
   preferredLanguage: SupportedLanguage = "en",
   priorLessonTitle: string | null = null,
+  openReviewMode: boolean = false,
 ): TutorSessionState {
   const lesson = getTutorLesson(lessonId);
   if (!lesson) throw new Error(`Unknown lesson id: ${lessonId}`);
@@ -278,6 +280,7 @@ export function createInitialTutorSessionState(
     topicsSinceSynthesis: 0,
     synthesisMode: false,
     priorLessonTitle,
+    openReviewMode,
   };
 }
 
@@ -355,10 +358,11 @@ export function parseTutorSessionState(
     topicsSinceSynthesis: (raw.topicsSinceSynthesis as number) ?? 0,
     synthesisMode: (raw.synthesisMode as boolean) ?? false,
     priorLessonTitle: (raw.priorLessonTitle as string | null) ?? null,
+    openReviewMode: (raw.openReviewMode as boolean) ?? false,
   };
 }
 
-type TurnAction = "intro" | "correct" | "incorrect" | "force_advance" | "wrap" | "synthesis_prompt" | "synthesis_ack";
+type TurnAction = "intro" | "correct" | "incorrect" | "force_advance" | "wrap" | "synthesis_prompt" | "synthesis_ack" | "open_review" | "review_ack";
 
 type MessageArgs = {
   action: TurnAction;
@@ -376,6 +380,7 @@ type MessageArgs = {
   affirmationPhrase: string;
   correctionPhrase: string;
   synthesisTopicTitles?: string[];
+  openReviewConcepts?: SpacedReviewConcept[];
 };
 
 function buildPrompt(args: MessageArgs): string {
@@ -539,6 +544,37 @@ function buildPrompt(args: MessageArgs): string {
       );
       break;
     }
+
+    case "open_review": {
+      const concepts = args.openReviewConcepts ?? [];
+      const conceptLines = concepts
+        .map((c, i) => `CONCEPT ${i + 1}: "${c.title}" - ${c.concept} (Memory tip: ${c.tip})`)
+        .join("\n");
+      lines.push(
+        `ACTION: Start-of-session spaced retrieval warm-up. Before introducing today's lesson, briefly revisit prior concepts the student needs to reinforce.`,
+        conceptLines,
+        `Ask the student to recall what they remember about 1-2 of these concepts. Keep it conversational - 2-3 sentences of setup, then 1 open question.`,
+        `Tell them today's lesson is "${lesson.title}" and you'll start it right after they respond.`,
+        `Tone: warm and energizing - frame this as "activating what you already know" not a test.`,
+      );
+      break;
+    }
+
+    case "review_ack": {
+      lines.push(
+        `ACTION: Student responded to the spaced retrieval warm-up. In 1-2 sentences, acknowledge their recall (affirm what they got right, gently correct any gaps).`,
+        `STUDENT SAID: "${studentMessage ?? ""}"`,
+        `Then transition: "Great - let's get into today's lesson."`,
+        `LESSON INTRO: Introduce "${lesson.title}" warmly in 1 sentence.`,
+        `TODAY'S GOAL: ${lesson.learningGoal}`,
+        `TOPIC 1 OF ${totalTopics}: "${currentSegment.title}"`,
+        `CONCEPT TO TEACH: ${currentSegment.concept}`,
+        `EXAMPLE TO SHARE: ${currentSegment.example}`,
+        `REQUIRED CLOSING QUESTION - end your response with this question exactly:`,
+        `"${currentSegment.question}"`,
+      );
+      break;
+    }
   }
 
   lines.push(
@@ -649,6 +685,24 @@ function fallbackMessage(args: MessageArgs): string {
         currentSegment.concept,
         currentSegment.question,
       ].join("\n\n");
+
+    case "open_review": {
+      const concepts = args.openReviewConcepts ?? [];
+      return [
+        `Before we start today's lesson, let's do a quick recall check.`,
+        concepts.map((c) => `${c.title}: ${c.tip}`).join(" | "),
+        `What do you remember about any of these? Share what comes to mind - we'll dive into ${lesson.title} right after.`,
+      ].join("\n\n");
+    }
+
+    case "review_ack":
+      return [
+        `Good recall - let's build on that.`,
+        `Today's lesson: ${lesson.title}. Goal: ${lesson.learningGoal}`,
+        `Topic 1 of ${totalTopics}: ${currentSegment.title}.`,
+        currentSegment.concept,
+        currentSegment.question,
+      ].join("\n\n");
   }
 }
 
@@ -690,9 +744,13 @@ export async function buildInitialTutorTurnForMode(args: {
   weakAreasSnapshot?: string[];
   preferredLanguage?: SupportedLanguage;
   priorLessonTitle?: string | null;
+  openReviewConcepts?: SpacedReviewConcept[];
 }) {
   const lesson = getTutorLesson(args.lessonId);
   if (!lesson) throw new Error(`Unknown lesson id: ${args.lessonId}`);
+
+  const reviewConcepts = args.openReviewConcepts ?? [];
+  const hasReview = reviewConcepts.length > 0;
 
   const state = createInitialTutorSessionState(
     args.lessonId,
@@ -700,13 +758,14 @@ export async function buildInitialTutorTurnForMode(args: {
     args.weakAreasSnapshot ?? [],
     args.preferredLanguage ?? "en",
     args.priorLessonTitle ?? null,
+    hasReview,
   );
 
   const currentSegment = lesson.segments[0];
   if (!currentSegment) throw new Error(`Lesson has no segments: ${args.lessonId}`);
 
   const message = await generateMessage({
-    action: "intro",
+    action: hasReview ? "open_review" : "intro",
     lesson,
     currentSegment,
     nextSegment: lesson.segments[1] ?? null,
@@ -720,13 +779,14 @@ export async function buildInitialTutorTurnForMode(args: {
     state,
     affirmationPhrase: selectAffirmation(state.affirmationIndex),
     correctionPhrase: selectCorrection(state.correctionIndex),
+    openReviewConcepts: hasReview ? reviewConcepts : undefined,
   });
 
   return {
     lesson,
     state: {
       ...state,
-      step: "teach" as const,
+      step: (hasReview ? "open_review" : "teach") as TutorSessionState["step"],
       awaitingAnswer: true,
       lastTutorMessage: message,
     },
@@ -793,6 +853,58 @@ export async function processTutorReply(args: {
       lastStudentMessage: studentMessage,
       lastTutorMessage: message,
       step: "synthesis_ack",
+    };
+
+    return {
+      lesson,
+      evaluation: syntheticEval,
+      nextState,
+      message,
+      bloomLevel: 2,
+      segmentId: currentSegment.id,
+      isSynthesisTurn: true,
+    };
+  }
+
+  // ── 0b. Open review ack: student responded to the retrieval warm-up ───────
+
+  if (state.openReviewMode) {
+    const syntheticEval: TutorEvaluation = {
+      correct: true,
+      matchedConcepts: [],
+      missedConcepts: [],
+      score: 100,
+      idealAnswer: "",
+      correctExplanation: "",
+      incorrectExplanation: "",
+      memoryTip: "",
+    };
+
+    const message = await generateMessage({
+      action: "review_ack",
+      lesson,
+      currentSegment,
+      nextSegment: lesson.segments[1] ?? null,
+      topicNumber: 1,
+      totalTopics,
+      attemptNumber: 0,
+      evaluation: null,
+      studentMessage,
+      masteredTitles: [],
+      struggledTitles: [],
+      state,
+      affirmationPhrase: selectAffirmation(state.affirmationIndex),
+      correctionPhrase: selectCorrection(state.correctionIndex),
+    });
+
+    const nextState: TutorSessionState = {
+      ...state,
+      openReviewMode: false,
+      awaitingAnswer: true,
+      tutorLastGaveAnswer: false,
+      lastStudentMessage: studentMessage,
+      lastTutorMessage: message,
+      step: "review_ack",
     };
 
     return {
@@ -925,6 +1037,7 @@ export async function processTutorReply(args: {
     correctionIndex: nextCorrectionIndex,
     synthesisMode: triggerSynthesis,
     topicsSinceSynthesis: triggerSynthesis ? 0 : newTopicsSinceSynthesis,
+    openReviewMode: false,
   };
 
   return {

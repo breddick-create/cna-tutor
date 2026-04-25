@@ -16,7 +16,8 @@ import { getStudentProgressionSnapshot } from "@/lib/progression/student";
 import { createClient } from "@/lib/supabase/server";
 import { buildInitialTutorTurnForMode } from "@/lib/tutor/orchestrator";
 import { recordStudyInteraction } from "@/lib/tracking/activity";
-import { getTutorLesson } from "@/lib/tutor/lessons";
+import { getTutorLesson, listTutorLessons } from "@/lib/tutor/lessons";
+import { getWeakConceptsForReview } from "@/lib/learning/spaced-review";
 import type { TutorMode } from "@/lib/tutor/types";
 import { resolvePreferredLanguage } from "@/lib/i18n/languages";
 
@@ -109,12 +110,22 @@ export async function POST(request: Request) {
   const priorLessonId = (lastCompleted?.session_state_json as Record<string, unknown> | null)?.lessonId as string | null ?? null;
   const priorLessonTitle = priorLessonId ? (getTutorLesson(priorLessonId)?.title ?? null) : null;
 
+  // Fetch the 2 weakest concepts from prior sessions for the opening retrieval warm-up
+  const openReviewConcepts = await getWeakConceptsForReview({
+    userId: viewer.user.id,
+    excludeLessonId: parsed.data.lessonId,
+    lessons: listTutorLessons(),
+    supabase,
+    limit: 2,
+  }).catch(() => []);
+
   const initialTurn = await buildInitialTutorTurnForMode({
     lessonId: parsed.data.lessonId,
     mode: parsed.data.mode as TutorMode | undefined,
     weakAreasSnapshot,
     preferredLanguage: resolvePreferredLanguage(viewer.profile.preferred_language),
     priorLessonTitle,
+    openReviewConcepts,
   });
 
   const { data: session, error: sessionError } = await supabase

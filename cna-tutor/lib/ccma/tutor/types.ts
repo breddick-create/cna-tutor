@@ -11,7 +11,9 @@ export type TutorStep =
   | "wrap"
   | "completed"
   | "synthesis_prompt"
-  | "synthesis_ack";
+  | "synthesis_ack"
+  | "open_review"
+  | "review_ack";
 
 export type LessonConceptMatch = {
   label: string;
@@ -94,6 +96,7 @@ export type TutorSessionState = {
   topicsSinceSynthesis: number;
   synthesisMode: boolean;
   priorLessonTitle: string | null;
+  openReviewMode: boolean;
 };
 
 export type TutorEvaluation = {
