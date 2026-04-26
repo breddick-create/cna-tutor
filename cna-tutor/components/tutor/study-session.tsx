@@ -153,6 +153,7 @@ export function StudySession({
     Array<{ slug: string; title: string; description: string }>
   >([]);
   const [lastCorrectTurnId, setLastCorrectTurnId] = useState<string | null>(null);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
   const lastSpokenTutorTurnIdRef = useRef<string | null>(null);
   const pendingAutoplayTurnIdRef = useRef<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -291,6 +292,10 @@ export function StudySession({
       window.removeEventListener("keydown", retryOnInteraction);
     };
   }, [turns, voiceEnabled, voiceReady, selectedVoice]);
+
+  useEffect(() => {
+    setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
+  }, []);
 
   useEffect(() => {
     turnsEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -566,8 +571,8 @@ export function StudySession({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-muted text-sm">
                 {t({
-                  en: "Give your best answer. Ctrl+Enter to submit.",
-                  es: "Da tu mejor respuesta. Ctrl+Enter para enviar.",
+                  en: isTouchDevice ? "Give your best answer before moving on." : "Give your best answer. Ctrl+Enter to submit.",
+                  es: isTouchDevice ? "Da tu mejor respuesta antes de continuar." : "Da tu mejor respuesta. Ctrl+Enter para enviar.",
                 })}
               </p>
               <button
