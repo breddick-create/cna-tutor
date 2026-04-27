@@ -114,13 +114,10 @@ export async function signInAction(formData: FormData) {
       profileProduct: existingProfile?.product,
     });
 
-    await admin.auth.admin.updateUserById(user.id, {
-      user_metadata: {
-        ...user.user_metadata,
-        product: effectiveProduct,
-      },
-    });
-
+    // Ensure profile exists BEFORE modifying the JWT via updateUserById.
+    // updateUserById rotates claims which can invalidate the in-memory session on the
+    // user-scoped supabase client, causing the upsert inside ensureProfileForUser to
+    // fail its RLS check and intermittently return null.
     const profile = await ensureProfileForUser(user, supabase, { product: effectiveProduct });
 
     if (!profile) {
@@ -129,14 +126,22 @@ export async function signInAction(formData: FormData) {
 
     const now = new Date().toISOString();
 
-    await admin
-      .from("profiles")
-      .update({
-        product: effectiveProduct,
-        last_login_at: now,
-        last_activity_at: now,
-      })
-      .eq("id", user.id);
+    await Promise.all([
+      admin.auth.admin.updateUserById(user.id, {
+        user_metadata: {
+          ...user.user_metadata,
+          product: effectiveProduct,
+        },
+      }),
+      admin
+        .from("profiles")
+        .update({
+          product: effectiveProduct,
+          last_login_at: now,
+          last_activity_at: now,
+        })
+        .eq("id", user.id),
+    ]);
 
     if (profile.role === "admin") {
       redirect(getProductAdminPath(effectiveProduct));

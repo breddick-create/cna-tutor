@@ -122,6 +122,21 @@ export async function ensureProfileForUser(
 
   if (error) {
     console.error("Failed to ensure profile for user", { userId: user.id, error });
+
+    // Last-resort: the upsert can return an error while the row still exists
+    // (e.g. a trigger fires after the write but before RETURNING is evaluated).
+    // Reading the row directly lets returning users sign in even when the upsert
+    // path is broken.
+    const { data: existing } = await admin
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (existing) {
+      return existing;
+    }
+
     return null;
   }
 
