@@ -4,7 +4,7 @@ import { formatDateTime, formatHours, formatShortDate } from "@/lib/utils";
 type StudentProfile = {
   id: string;
   full_name: string;
-  email: string;
+  username: string;
   cohort: string | null;
   study_goal_hours: number;
   last_login_at: string | null;
@@ -78,7 +78,7 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
 
   let profileQuery = supabase
     .from("ccma_profiles")
-    .select("id, full_name, email, cohort, study_goal_hours, last_login_at, last_activity_at")
+    .select("id, full_name, username, cohort, study_goal_hours, last_login_at, last_activity_at")
     .eq("role", "student")
     .order("created_at", { ascending: false });
 
@@ -192,7 +192,7 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
       return {
         id: student.id,
         name: student.full_name,
-        email: student.email,
+        username: student.username,
         cohort: student.cohort ?? "Unassigned",
         totalSecondsRaw: stats?.totalSeconds ?? 0,
         activeSecondsRaw: activeSeconds,
@@ -272,13 +272,13 @@ export async function getAdminDashboard(filters: AdminDashboardFilters = {}) {
       .map((row) => ({
         id: row.id,
         fullName: row.name,
-        email: row.email,
+        username: row.username,
         reason: row.watchReasons.join(" - "),
       })),
     recentStudents: reportRows.slice(0, 8).map((row) => ({
       id: row.id,
       fullName: row.name,
-      email: row.email,
+      username: row.username,
       cohort: row.cohort,
       activeHours: row.activeHours,
       lastActivity: row.lastActivity,

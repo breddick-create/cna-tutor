@@ -4,7 +4,7 @@ export function ParticipantsTable({
   rows: Array<{
     id: string;
     name: string;
-    email: string;
+    username: string;
     cohort: string;
     totalHours: string;
     activeHours: string;
@@ -45,7 +45,7 @@ export function ParticipantsTable({
                 <tr key={row.id} className="border-t border-[var(--border)] align-top">
                   <td className="px-4 py-3">
                     <p className="font-medium">{row.name}</p>
-                    <p className="text-muted mt-1 text-xs">{row.email}</p>
+                    <p className="text-muted mt-1 text-xs">{row.username}</p>
                   </td>
                   <td className="px-4 py-3">{row.cohort}</td>
                   <td className="px-4 py-3">{row.totalHours}</td>

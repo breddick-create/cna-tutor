@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
   const headers = [
     "Name",
-    "Email",
+    "Username",
     "Cohort",
     "Total Hours",
     "Active Study Hours",
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   const rows = dashboard.participantRows.map((row) =>
     [
       row.name,
-      row.email,
+      row.username,
       row.cohort,
       row.totalHours,
       row.activeHours,

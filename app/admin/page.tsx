@@ -115,7 +115,7 @@ export default async function AdminPage({
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-semibold">{student.fullName}</p>
-                      <p className="text-muted mt-1 text-sm">{student.email}</p>
+                      <p className="text-muted mt-1 text-sm">{student.username}</p>
                     </div>
                     <span className="rounded-full bg-[rgba(166,60,47,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--danger)]">
                       follow up
@@ -150,7 +150,7 @@ export default async function AdminPage({
                     <tr key={student.id} className="border-t border-[var(--border)]">
                       <td className="px-4 py-3">
                         <p className="font-medium">{student.fullName}</p>
-                        <p className="text-muted mt-1 text-xs">{student.email}</p>
+                        <p className="text-muted mt-1 text-xs">{student.username}</p>
                       </td>
                       <td className="px-4 py-3">{student.cohort}</td>
                       <td className="px-4 py-3">{student.activeHours}</td>

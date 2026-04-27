@@ -20,7 +20,7 @@ export default async function StudentLayout({
       title="CCMA Tutor"
       subtitle="Your guided study workspace for the NHA CCMA exam."
       fullName={viewer.profile.full_name}
-      email={viewer.profile.email}
+      username={viewer.profile.username}
     >
       {children}
     </AppShell>

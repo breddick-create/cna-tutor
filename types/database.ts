@@ -237,6 +237,7 @@ export type Database = {
           role: "student" | "admin";
           full_name: string;
           email: string;
+          username: string;
           cohort: string | null;
           study_goal_hours: number;
           last_login_at: string | null;
@@ -249,6 +250,7 @@ export type Database = {
           role?: "student" | "admin";
           full_name: string;
           email: string;
+          username?: string;
           cohort?: string | null;
           study_goal_hours?: number;
           last_login_at?: string | null;
@@ -261,6 +263,7 @@ export type Database = {
           role?: "student" | "admin";
           full_name?: string;
           email?: string;
+          username?: string;
           cohort?: string | null;
           study_goal_hours?: number;
           last_login_at?: string | null;

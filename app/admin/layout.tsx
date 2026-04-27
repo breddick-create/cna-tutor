@@ -14,7 +14,7 @@ export default async function AdminLayout({
       title="CCMA Tutor Admin"
       subtitle="Monitor learner engagement, progress, and completion."
       fullName={viewer.profile.full_name}
-      email={viewer.profile.email}
+      username={viewer.profile.username}
     >
       {children}
     </AppShell>

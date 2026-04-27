@@ -1,6 +1,5 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -12,26 +11,36 @@ function buildRedirect(path: string, message: string) {
 }
 
 export async function signInAction(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const username = String(formData.get("username") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
 
-  if (!email || !password) {
-    redirect(buildRedirect("/sign-in", "Enter your email and password."));
+  if (!username || !password) {
+    redirect(buildRedirect("/sign-in", "Enter your username and password."));
+  }
+
+  const adminClient = createAdminClient();
+
+  // Resolve username to the stored auth email
+  const { data: authEmail, error: lookupError } = await adminClient
+  .rpc("get_email_by_username" as never, { p_username: username } as never);
+
+  if (lookupError || !authEmail) {
+    redirect(buildRedirect("/sign-in", "Invalid username or password."));
   }
 
   const supabase = await createClient();
   const {
     data: { user },
     error,
-  } = await supabase.auth.signInWithPassword({ email, password });
+  } = await supabase.auth.signInWithPassword({ email: authEmail as string, password });
 
   if (error) {
-    redirect(buildRedirect("/sign-in", error.message));
+    redirect(buildRedirect("/sign-in", "Invalid username or password."));
   }
 
   if (user) {
     const now = new Date().toISOString();
-    await createAdminClient()
+    await adminClient
       .from("ccma_profiles")
       .update({
         last_login_at: now,
@@ -44,31 +53,48 @@ export async function signInAction(formData: FormData) {
 }
 
 export async function signUpAction(formData: FormData) {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const username = String(formData.get("username") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const fullName = String(formData.get("full_name") ?? "").trim();
   const cohort = String(formData.get("cohort") ?? "").trim();
-  const headerStore = await headers();
-  const origin =
-    headerStore.get("origin") ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000";
 
-  if (!email || !password || !fullName) {
-    redirect(buildRedirect("/sign-up", "Name, email, and password are required."));
+  if (!username || !password || !fullName) {
+    redirect(buildRedirect("/sign-up", "Name, username, and password are required."));
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
-    email,
+  if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+    redirect(
+      buildRedirect(
+        "/sign-up",
+        "Username must be 3–30 characters and may only contain letters, numbers, dots, hyphens, and underscores.",
+      ),
+    );
+  }
+
+  const adminClient = createAdminClient();
+
+  const { data: existing } = await adminClient
+    .from("ccma_profiles")
+    .select("id")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (existing) {
+    redirect(buildRedirect("/sign-up", "That username is already taken."));
+  }
+
+  // Supabase Auth requires an email; use a synthetic one users never see
+  const syntheticEmail = `${username}@ccma.internal`;
+
+  const { error } = await adminClient.auth.admin.createUser({
+    email: syntheticEmail,
     password,
-    options: {
-      emailRedirectTo: `${origin}/auth/callback?next=/dashboard`,
-      data: {
-        full_name: fullName,
-        cohort,
-        role: "student",
-      },
+    email_confirm: true,
+    user_metadata: {
+      full_name: fullName,
+      username,
+      cohort,
+      role: "student",
     },
   });
 
@@ -77,10 +103,7 @@ export async function signUpAction(formData: FormData) {
   }
 
   redirect(
-    buildRedirect(
-      "/sign-in",
-      "Account created. Check your email to confirm your account, then sign in.",
-    ),
+    buildRedirect("/sign-in", "Account created! Sign in with your username and password."),
   );
 }
 

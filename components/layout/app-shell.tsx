@@ -8,14 +8,14 @@ export function AppShell({
   title,
   subtitle,
   fullName,
-  email,
+  username,
 }: {
   children: React.ReactNode;
   roleLabel: string;
   title: string;
   subtitle: string;
   fullName: string;
-  email: string;
+  username: string;
 }) {
   const navigation =
     roleLabel === "Admin"
@@ -37,7 +37,7 @@ export function AppShell({
               <span className="rounded-full bg-[rgba(28,124,104,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--brand-strong)]">
                 {roleLabel}
               </span>
-              <p className="text-muted text-sm">{email}</p>
+              <p className="text-muted text-sm">{username}</p>
             </div>
             <h1 className="mt-3 text-3xl font-semibold">{title}</h1>
             <p className="text-muted mt-2 max-w-2xl leading-7">{subtitle}</p>
@@ -71,7 +71,7 @@ export function AppShell({
             <div className="panel rounded-[1.5rem] p-5">
               <p className="eyebrow">Signed In As</p>
               <p className="mt-3 text-xl font-semibold">{fullName}</p>
-              <p className="text-muted mt-2 text-sm">{email}</p>
+              <p className="text-muted mt-2 text-sm">{username}</p>
             </div>
 
             <div className="panel rounded-[1.5rem] p-5">
