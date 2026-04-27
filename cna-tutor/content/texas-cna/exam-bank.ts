@@ -1,6 +1,7 @@
 import type { ExamQuestion } from "@/lib/exams/types";
 import { expandedDomainExamBank } from "@/content/texas-cna/exam-bank-expansion";
 import { writtenExamBank } from "@/content/texas-cna/written-exam-bank";
+import { officialWrittenBank } from "@/content/texas-cna/official-written-bank";
 
 const foundationalExamBank: ExamQuestion[] = [
   {
@@ -2407,4 +2408,5 @@ export const texasCnaExamBank: ExamQuestion[] = [
   ...scenarioExamBank,
   ...expandedDomainExamBank,
   ...writtenExamBank,
+  ...officialWrittenBank,
 ];

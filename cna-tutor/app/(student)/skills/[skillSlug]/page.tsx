@@ -5,6 +5,7 @@ import { recordCnaSkillPracticeAction } from "@/app/(student)/actions";
 import { requireViewer } from "@/lib/auth/session";
 import { getCnaClinicalSkill } from "@/lib/cna/skills";
 import { getCnaSkillsProgress } from "@/lib/cna/skills-progress";
+import { getCnaSkillSearchUrl, SKILLS_PLAYLIST_EMBED_URL, SKILLS_PLAYLIST_URL } from "@/lib/resources/cna-skill-videos";
 
 type SkillPageProps = {
   params: Promise<{ skillSlug: string }>;
@@ -26,6 +27,7 @@ export default async function SkillPracticePage({
   const progress = await getCnaSkillsProgress(viewer.user.id);
   const current = progress.skills.find((entry) => entry.skill.slug === skill.slug);
   const message = typeof query.message === "string" ? decodeURIComponent(query.message) : null;
+  const videoSearchUrl = getCnaSkillSearchUrl(skill.slug);
 
   return (
     <div className="space-y-6">
@@ -57,6 +59,49 @@ export default async function SkillPracticePage({
       </section>
 
       <section className="panel rounded-[1.75rem] p-6">
+        <p className="eyebrow">Video Demonstration</p>
+        <h2 className="mt-2 text-2xl font-semibold">Watch before you practice.</h2>
+        <p className="text-muted mt-3 max-w-3xl text-sm leading-6">
+          Watch a full Prometric-style demonstration of this skill before running the checklist. Seeing the correct sequence once is worth more than reading steps five times.
+        </p>
+
+        <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-white/75 shadow-sm">
+          <div className="aspect-video w-full">
+            <iframe
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              className="h-full w-full"
+              referrerPolicy="strict-origin-when-cross-origin"
+              src={SKILLS_PLAYLIST_EMBED_URL}
+              title={`CNA clinical skills demonstration playlist`}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <a
+            className="button-primary w-full sm:w-auto"
+            href={videoSearchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Search YouTube: {skill.title}
+          </a>
+          <a
+            className="button-secondary w-full sm:w-auto"
+            href={SKILLS_PLAYLIST_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Full CNA skills playlist
+          </a>
+        </div>
+        <p className="text-muted mt-3 text-sm leading-6">
+          The search button opens YouTube results for <strong>{skill.title}</strong> so you can find the exact Prometric demonstration.
+        </p>
+      </section>
+
+      <section className="panel rounded-[1.75rem] p-6">
         <p className="eyebrow">Walkthrough Mode</p>
         <h2 className="mt-2 text-2xl font-semibold">Use the checklist in sequence.</h2>
         <div className="mt-5 space-y-3">
@@ -85,8 +130,15 @@ export default async function SkillPracticePage({
         <p className="eyebrow">Timed Practice</p>
         <h2 className="mt-2 text-2xl font-semibold">Run it under exam pressure.</h2>
         <p className="text-muted mt-3 max-w-3xl text-sm leading-6">
-          This skill sits in the <span className="font-semibold">{skill.timingBand}</span> timing band. Use a countdown that matches the Prometric timing window for this skill group, then log the run here when you finish.
+          This skill sits in the <span className="font-semibold">{skill.timingBand}</span> timing band. Set a timer that matches the Prometric window for this skill group, perform the skill from memory, then log the run here.
         </p>
+        <div className="mt-4 rounded-[1.5rem] border border-[rgba(217,111,50,0.18)] bg-[rgba(255,249,243,0.92)] p-4">
+          <p className="text-sm font-semibold text-[color:#9a4f17]">Timing bands</p>
+          <p className="mt-2 text-sm leading-6 text-[color:#5f3a1a]">
+            Short: 3–5 min · Moderate: 5–8 min · Long: 8–12 min · Extended: 12–15 min.
+            Use the shorter end when starting out, tighter as you gain confidence.
+          </p>
+        </div>
 
         <form action={recordCnaSkillPracticeAction} className="mt-5">
           <input name="skill_slug" type="hidden" value={skill.slug} />

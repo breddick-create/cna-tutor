@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { requireViewer } from "@/lib/auth/session";
 import { getCnaSkillsProgress } from "@/lib/cna/skills-progress";
+import { SKILLS_PLAYLIST_EMBED_URL, SKILLS_PLAYLIST_URL } from "@/lib/resources/cna-skill-videos";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -89,6 +90,41 @@ export default async function SkillsHomePage({
               </div>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="panel rounded-[1.75rem] p-6">
+        <p className="eyebrow">Video Demonstrations</p>
+        <h2 className="mt-2 text-2xl font-semibold">Watch Prometric-style skill demonstrations.</h2>
+        <p className="text-muted mt-3 max-w-3xl text-sm leading-6">
+          Use this playlist alongside your walkthroughs to see the correct sequence, indirect care behaviors, and timing before your timed practice runs.
+        </p>
+
+        <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-white/75 shadow-sm">
+          <div className="aspect-video w-full">
+            <iframe
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              className="h-full w-full"
+              referrerPolicy="strict-origin-when-cross-origin"
+              src={SKILLS_PLAYLIST_EMBED_URL}
+              title="CNA Clinical Skills Demonstration Playlist"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <a
+            className="button-primary w-full sm:w-auto"
+            href={SKILLS_PLAYLIST_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open full playlist on YouTube
+          </a>
+          <p className="text-muted text-sm leading-6">
+            Each skill practice page also has a direct search link for that specific skill.
+          </p>
         </div>
       </section>
     </div>
