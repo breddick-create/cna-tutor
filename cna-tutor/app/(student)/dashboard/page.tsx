@@ -263,7 +263,7 @@ export default async function StudentDashboardPage({
   });
 
   const readinessLabel =
-    dashboard.progression.readinessLabel as keyof typeof readinessToneStyles;
+    dashboard.readinessSections.overall.label as keyof typeof readinessToneStyles;
   const readinessTone = readinessToneStyles[readinessLabel];
   const readinessSupport = getReadinessSupportMessage(readinessLabel);
   const topWeakAreas = dashboard.weakAreas.slice(0, 3);
@@ -276,7 +276,7 @@ export default async function StudentDashboardPage({
     .map((attempt) => attempt.score)
     .reverse();
   const readinessDeltaLabel = formatReadinessDelta(
-    dashboard.progression.readinessScore,
+    dashboard.readinessSections.written.score,
     dashboard.progression.signals.pretestScore,
   );
 
@@ -315,7 +315,7 @@ export default async function StudentDashboardPage({
                 {dashboard.nextStep.title}
               </h2>
               <p className="mt-4 max-w-3xl text-base leading-7 text-[color:#5f3a1a]">
-                {dashboard.recoveryPlan.active
+                {dashboard.nextStepSection === "written" && dashboard.recoveryPlan.active
                   ? `${dashboard.recoveryPlan.summary} ${dashboard.recoveryPlan.encouragement}`
                   : dashboard.nextStep.description}
               </p>
@@ -323,13 +323,13 @@ export default async function StudentDashboardPage({
           </div>
 
           <div className="mt-5 rounded-[1.5rem] border border-[rgba(217,111,50,0.18)] bg-white/80 p-5">
-            <p className="text-sm font-semibold text-[color:#9a4f17]">
-              {dashboard.recoveryPlan.active
+              <p className="text-sm font-semibold text-[color:#9a4f17]">
+              {dashboard.nextStepSection === "written" && dashboard.recoveryPlan.active
                 ? text("Why this matters right now", "Por que esto importa ahora")
                 : text("Why this comes first", "Por que esto va primero")}
             </p>
             <p className="mt-2 text-sm leading-6 text-[color:#5f3a1a]">
-              {dashboard.recoveryPlan.active
+              {dashboard.nextStepSection === "written" && dashboard.recoveryPlan.active
                 ? text(
                     "The app is narrowing your focus so you can rebuild momentum instead of spreading your effort around.",
                     "La app esta reduciendo tu enfoque para que recuperes impulso en lugar de dispersar tu esfuerzo.",
@@ -355,33 +355,33 @@ export default async function StudentDashboardPage({
         <DashboardSection
           strong
           description={text(
-            "Start here after your next step. This shows how close you are to exam-ready right now.",
-            "Empieza aqui despues de tu siguiente paso. Esto muestra que tan cerca estas de estar listo para el examen en este momento.",
+            "Start here after your next step. This blends written and clinical-skills readiness into one overall CNA readiness view.",
+            "Empieza aqui despues de tu siguiente paso. Esto combina la preparacion escrita y de habilidades clinicas en una sola vista general.",
           )}
           eyebrow={text("Readiness", "Preparacion")}
-          title={text("Your readiness score", "Tu puntaje de preparacion")}
+          title={text("Your overall CNA readiness", "Tu preparacion general de CNA")}
         >
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-5">
               <ReadinessRing
                 label={text("Exam readiness", "Preparacion para el examen")}
                 size={126}
-                value={dashboard.progression.readinessScore}
+                value={dashboard.readinessSections.overall.score}
               />
               <div>
-                <p className="text-5xl font-semibold">{dashboard.progression.readinessScore}%</p>
-                <p className="mt-2 text-lg font-semibold">{dashboard.progression.readinessLabel}</p>
+                <p className="text-5xl font-semibold">{dashboard.readinessSections.overall.score}%</p>
+                <p className="mt-2 text-lg font-semibold">{dashboard.readinessSections.overall.label}</p>
               </div>
             </div>
             <span
               className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${readinessTone}`}
             >
-              {dashboard.progression.readinessLabel}
+              {dashboard.readinessSections.overall.label}
             </span>
           </div>
 
           <div className="mt-5">
-            <ProgressBar value={dashboard.progression.readinessScore} />
+            <ProgressBar value={dashboard.readinessSections.overall.score} />
           </div>
 
           <p className="mt-4 text-sm font-semibold leading-6">{dashboard.progression.summary}</p>
@@ -394,25 +394,44 @@ export default async function StudentDashboardPage({
               value={`${dashboard.progression.signals.pretestScore ?? 0}%`}
             />
             <MetricCard
-              helper={text("Progress over time", "Progreso con el tiempo")}
-              label={text("Since pre-test", "Desde la preevaluacion")}
+              helper={text("Written section change over time", "Cambio con el tiempo en la seccion escrita")}
+              label={text("Written since pre-test", "Escrita desde la preevaluacion")}
               note={readinessDeltaLabel.note}
               value={readinessDeltaLabel.value}
             />
             <MetricCard
-              helper={text("Your strongest long practice check", "Tu mejor verificacion larga de practica")}
-              label={text("Best full practice exam", "Mejor examen completo de practica")}
-              value={
-                dashboard.practiceExamStatus.bestScore !== null
-                  ? `${dashboard.practiceExamStatus.bestScore}%`
-                  : text("Not yet", "Todavia no")
-              }
+              helper={text("Combined weighting: 70% written, 30% skills", "Ponderacion combinada: 70% escrita, 30% habilidades")}
+              label={text("Skills section", "Seccion de habilidades")}
+              value={`${dashboard.readinessSections.skills.score}%`}
             />
           </div>
           <div className="mt-5">
             <StreakBadge
               currentStreak={dashboard.streak.current}
               longestStreak={dashboard.streak.longest}
+            />
+          </div>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <SectionReadinessCard
+              ctaLabel={dashboard.readinessSections.written.nextStepLabel}
+              description={dashboard.readinessSections.written.description}
+              helper={text(
+                "This section uses your current pre-test, lessons, quizzes, and full practice exams.",
+                "Esta seccion usa tu preevaluacion actual, lecciones, quizzes y examenes completos de practica.",
+              )}
+              href={dashboard.readinessSections.written.href}
+              label={dashboard.readinessSections.written.label}
+              score={dashboard.readinessSections.written.score}
+              title={dashboard.readinessSections.written.title}
+            />
+            <SectionReadinessCard
+              ctaLabel={dashboard.readinessSections.skills.nextStepLabel}
+              description={dashboard.readinessSections.skills.description}
+              helper={`${dashboard.readinessSections.skills.practicedCount}/${dashboard.readinessSections.skills.totalSkills} skills practiced. Next: ${dashboard.readinessSections.skills.nextSkillTitle}.`}
+              href={dashboard.readinessSections.skills.href}
+              label={dashboard.readinessSections.skills.label}
+              score={dashboard.readinessSections.skills.score}
+              title={dashboard.readinessSections.skills.title}
             />
           </div>
         </DashboardSection>
@@ -458,11 +477,11 @@ export default async function StudentDashboardPage({
               description="You do not have any urgent weak areas showing right now. Keep checking your understanding with quizzes and full practice exams so it stays that way."
               eyebrow="Needs More Practice"
               primaryAction={{
-                href: "/quiz",
+                href: "/written/quiz",
                 label: "Take practice quiz",
               }}
               secondaryAction={{
-                href: "/mock-exam",
+                href: "/written/mock-exam",
                 label: "Open practice exam",
               }}
               title="Your biggest weak spots are under control."
@@ -518,11 +537,11 @@ export default async function StudentDashboardPage({
                 description="Once a weaker topic rises clearly above where you started, that improvement will show here."
                 eyebrow="Progress"
                 primaryAction={{
-                  href: "/study-plan",
+                  href: "/written/study-plan",
                   label: "Start next lesson",
                 }}
                 secondaryAction={{
-                  href: "/quiz",
+                  href: "/written/quiz",
                   label: "Take practice quiz",
                 }}
                 title="Your improvement will show here as you keep going."
@@ -578,7 +597,7 @@ export default async function StudentDashboardPage({
           eyebrow="Drill Weak Areas"
           title="Run a fast weak-area drill"
           action={
-            <Link className="button-secondary w-full sm:w-auto" href="/quiz?mode=drill">
+            <Link className="button-secondary w-full sm:w-auto" href="/written/quiz?mode=drill">
               Drill again
             </Link>
           }
@@ -590,10 +609,10 @@ export default async function StudentDashboardPage({
             </p>
           </div>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Link className="button-primary w-full sm:w-auto" href="/quiz?mode=drill">
+            <Link className="button-primary w-full sm:w-auto" href="/written/quiz?mode=drill">
               Start weak-area drill
             </Link>
-            <Link className="button-secondary w-full sm:w-auto" href="/study-plan">
+            <Link className="button-secondary w-full sm:w-auto" href="/written/study-plan">
               Stay with study plan
             </Link>
           </div>
@@ -612,7 +631,7 @@ export default async function StudentDashboardPage({
               </p>
             </div>
             <div className="mt-5">
-              <Link className="button-primary w-full sm:w-auto" href="/exam-day">
+              <Link className="button-primary w-full sm:w-auto" href="/written/exam-day">
                 Open exam-day plan
               </Link>
             </div>
@@ -621,7 +640,9 @@ export default async function StudentDashboardPage({
 
         <DashboardSection
           description={
-            dashboard.recoveryPlan.active && dashboard.recoveryPlan.reason !== "inactivity"
+            dashboard.nextStepSection === "written" &&
+            dashboard.recoveryPlan.active &&
+            dashboard.recoveryPlan.reason !== "inactivity"
               ? "Recent scores show you need a more focused reset. Short quizzes can help confirm when a weak topic is starting to stick again."
               : "Use short quizzes and full practice exams to check whether your study work is turning into steady performance."
           }
@@ -731,7 +752,7 @@ export default async function StudentDashboardPage({
                 description="You haven't started quiz practice yet. Begin with a short quiz after your next guided lesson so you can see whether the material is sticking."
                 eyebrow="Practice"
                 primaryAction={{
-                  href: "/quiz",
+                  href: "/written/quiz",
                   label: "Start first quiz",
                 }}
                 title="Your quiz results will show here."
@@ -808,5 +829,44 @@ export default async function StudentDashboardPage({
 
       <CnaSkillsTrainingVideos />
     </div>
+  );
+}
+
+function SectionReadinessCard({
+  title,
+  description,
+  score,
+  label,
+  href,
+  ctaLabel,
+  helper,
+}: {
+  title: string;
+  description: string;
+  score: number;
+  label: string;
+  href: string;
+  ctaLabel: string;
+  helper?: string;
+}) {
+  return (
+    <article className="rounded-[1.5rem] border border-[var(--border)] bg-white/78 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-semibold">{title}</p>
+          <p className="text-muted mt-2 text-sm leading-6">{description}</p>
+        </div>
+        <span className="rounded-full bg-[rgba(23,60,255,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--brand-strong)]">
+          {score}%
+        </span>
+      </div>
+      <p className="mt-3 text-sm font-medium leading-6">{label}</p>
+      {helper ? <p className="text-muted mt-2 text-sm leading-6">{helper}</p> : null}
+      <div className="mt-4">
+        <Link className="button-secondary w-full sm:w-auto" href={href}>
+          {ctaLabel}
+        </Link>
+      </div>
+    </article>
   );
 }

@@ -1,10 +1,8 @@
 export const STUDENT_WORKSPACE_NAVIGATION = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/written", label: "Written" },
+  { href: "/skills", label: "Skills" },
   { href: "/exam-day", label: "Exam Day" },
-  { href: "/study", label: "Study" },
-  { href: "/study-plan", label: "Plan" },
-  { href: "/quiz", label: "Quiz" },
-  { href: "/mock-exam", label: "Mock Exam" },
 ] as const;
 
 export function isStudentProtectedPath(pathname: string) {
@@ -14,6 +12,10 @@ export function isStudentProtectedPath(pathname: string) {
     pathname === "/exam-day" ||
     pathname === "/pretest" ||
     pathname.startsWith("/pretest/") ||
+    pathname === "/written" ||
+    pathname.startsWith("/written/") ||
+    pathname === "/skills" ||
+    pathname.startsWith("/skills/") ||
     pathname === "/study" ||
     pathname.startsWith("/study/") ||
     pathname === "/study-plan" ||

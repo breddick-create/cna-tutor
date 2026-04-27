@@ -1,3 +1,12 @@
+import {
+  getCnaSectionDescription,
+  getCnaSectionHref,
+  getCnaSectionLabel,
+  getLowerReadinessSection,
+  getOverallCnaReadiness,
+  mapLegacyCnaPathToWrittenPath,
+} from "@/lib/cna/sections";
+import { getCnaSkillsProgress } from "@/lib/cna/skills-progress";
 import type { PretestDomainBreakdown } from "@/lib/onboarding/pretest";
 import { getBadgesForProduct } from "@/lib/learning/badge-definitions";
 import { createClient } from "@/lib/supabase/server";
@@ -291,11 +300,14 @@ export async function getStudentDashboard(args: {
   pretestDomainBreakdown: PretestDomainBreakdown[];
 }) {
   const supabase = await createClient();
-  const progression = await getStudentProgressionSnapshot({
-    userId: args.userId,
-    pretestScore: args.pretestScore,
-    pretestDomainBreakdown: args.pretestDomainBreakdown,
-  });
+  const [progression, skillsProgress] = await Promise.all([
+    getStudentProgressionSnapshot({
+      userId: args.userId,
+      pretestScore: args.pretestScore,
+      pretestDomainBreakdown: args.pretestDomainBreakdown,
+    }),
+    getCnaSkillsProgress(args.userId),
+  ]);
 
   const [
     { data: rawQuizAttempts },
@@ -311,6 +323,7 @@ export async function getStudentDashboard(args: {
       .from("quiz_attempts")
       .select("id, score, total_questions, completed_at, domain_id")
       .eq("user_id", args.userId)
+      .eq("section", "written")
       .not("completed_at", "is", null)
       .order("completed_at", { ascending: false })
       .limit(6),
@@ -318,6 +331,7 @@ export async function getStudentDashboard(args: {
       .from("mock_exam_attempts")
       .select("id, percent, passed, completed_at")
       .eq("user_id", args.userId)
+      .eq("section", "written")
       .not("completed_at", "is", null)
       .order("completed_at", { ascending: false })
       .limit(6),
@@ -325,6 +339,7 @@ export async function getStudentDashboard(args: {
       .from("tutor_sessions")
       .select("id, status, mode, last_activity_at, session_state_json")
       .eq("user_id", args.userId)
+      .eq("section", "written")
       .order("last_activity_at", { ascending: false })
       .limit(6),
     supabase
@@ -413,35 +428,58 @@ export async function getStudentDashboard(args: {
     resumableLessonTitle: resumableLesson?.title ?? null,
     resumableLessonDomainSlug: resumableLesson?.domainSlug ?? null,
   });
-  const nextStep =
-    recoveryPlan.active
+  const writtenRecoveryNextStep = recoveryPlan.active
+    ? {
+        title: recoveryPlan.nextStep.title,
+        description: recoveryPlan.nextStep.description,
+        ctaLabel: recoveryPlan.nextStep.ctaLabel,
+        ctaHref: mapLegacyCnaPathToWrittenPath(recoveryPlan.nextStep.ctaHref),
+      }
+    : null;
+  const writtenNextStep =
+    writtenRecoveryNextStep ??
+    (resumableSession && resumableLesson
       ? {
-          title: recoveryPlan.nextStep.title,
-          description: recoveryPlan.nextStep.description,
-          ctaLabel: recoveryPlan.nextStep.ctaLabel,
-          ctaHref: recoveryPlan.nextStep.ctaHref,
+          title: `Resume ${resumableLesson.title}`,
+          description:
+            "You already started this lesson. Picking it back up is the best way to make progress today.",
+          ctaLabel: "Resume lesson",
+          ctaHref: mapLegacyCnaPathToWrittenPath(`/study/${resumableSession.id}`),
         }
-      : resumableSession && resumableLesson
-        ? {
-            title: `Resume ${resumableLesson.title}`,
-            description:
-              "You already started this lesson. Picking it back up is the best way to make progress today.",
-            ctaLabel: "Resume lesson",
-            ctaHref: `/study/${resumableSession.id}`,
-          }
-        : {
-            title: progression.nextBestTask.title,
-            description: progression.nextBestTask.description,
-            ctaLabel:
-              progression.nextBestTask.type === "mock_exam"
-                ? "Take practice exam"
-                : progression.nextBestTask.type === "quiz"
-                  ? "Take practice quiz"
-                  : progression.nextBestTask.type === "maintain"
-                    ? "Open exam-day plan"
-                    : "Continue study plan",
-            ctaHref: progression.nextBestTask.href,
-          };
+      : {
+          title: progression.nextBestTask.title,
+          description: progression.nextBestTask.description,
+          ctaLabel:
+            progression.nextBestTask.type === "mock_exam"
+              ? "Take practice exam"
+              : progression.nextBestTask.type === "quiz"
+                ? "Take practice quiz"
+                : progression.nextBestTask.type === "maintain"
+                  ? "Open exam-day plan"
+                  : "Continue study plan",
+          ctaHref: mapLegacyCnaPathToWrittenPath(progression.nextBestTask.href),
+        });
+  const overallReadinessScore = getOverallCnaReadiness({
+    writtenReadinessScore: progression.readinessScore,
+    skillsReadinessScore: skillsProgress.readinessScore,
+  });
+  const lowerSection = getLowerReadinessSection({
+    writtenReadinessScore: progression.readinessScore,
+    skillsReadinessScore: skillsProgress.readinessScore,
+  });
+  const nextStep =
+    lowerSection === "skills"
+      ? {
+          title: `Practice ${skillsProgress.nextSkill.title} next`,
+          description:
+            "Your clinical skills section needs more attention than your written section right now, so the dashboard is sending you there first.",
+          ctaLabel: "Open skills practice",
+          ctaHref: `/skills/${skillsProgress.nextSkill.slug}`,
+        }
+      : {
+          ...writtenNextStep,
+          ctaHref: mapLegacyCnaPathToWrittenPath(writtenNextStep.ctaHref),
+        };
   const inactive = isInactive(profileRow?.last_activity_at ?? null);
   const product = profileRow?.product ?? "cna";
   const fallbackDefinitions = getBadgesForProduct(product);
@@ -488,6 +526,44 @@ export async function getStudentDashboard(args: {
 
   return {
     progression,
+    nextStepSection: lowerSection,
+    readinessSections: {
+      overall: {
+        score: overallReadinessScore,
+        label:
+          overallReadinessScore >= 85
+            ? "Exam Ready"
+            : overallReadinessScore >= 70
+              ? "Almost There"
+              : overallReadinessScore >= 45
+                ? "Making Progress"
+                : "Not Ready",
+      },
+      written: {
+        section: "written" as const,
+        title: getCnaSectionLabel("written"),
+        href: getCnaSectionHref("written"),
+        description: getCnaSectionDescription("written"),
+        score: progression.readinessScore,
+        label: progression.readinessLabel,
+        nextStepHref: writtenNextStep.ctaHref,
+        nextStepLabel: "Open written section",
+      },
+      skills: {
+        section: "skills" as const,
+        title: getCnaSectionLabel("skills"),
+        href: getCnaSectionHref("skills"),
+        description: getCnaSectionDescription("skills"),
+        score: skillsProgress.readinessScore,
+        label: skillsProgress.readinessLabel,
+        practicedCount: skillsProgress.practicedCount,
+        totalSkills: skillsProgress.totalSkills,
+        nextSkillTitle: skillsProgress.nextSkill.title,
+        nextStepHref: `/skills/${skillsProgress.nextSkill.slug}`,
+        nextStepLabel: "Open skills section",
+        summary: skillsProgress.summary,
+      },
+    },
     isInactive: inactive,
     streak: {
       current: streakRow?.current_streak ?? 0,

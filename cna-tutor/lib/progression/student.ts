@@ -31,6 +31,7 @@ export async function getStudentProgressionSnapshot(args: {
       .from("quiz_attempts")
       .select("id, domain_id, score, total_questions, completed_at")
       .eq("user_id", args.userId)
+      .eq("section", "written")
       .not("completed_at", "is", null)
       .order("completed_at", { ascending: false })
       .limit(6),
@@ -38,6 +39,7 @@ export async function getStudentProgressionSnapshot(args: {
       .from("mock_exam_attempts")
       .select("id, percent, passed, completed_at")
       .eq("user_id", args.userId)
+      .eq("section", "written")
       .not("completed_at", "is", null)
       .order("completed_at", { ascending: false })
       .limit(6),

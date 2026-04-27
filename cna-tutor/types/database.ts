@@ -202,6 +202,7 @@ export type Database = {
         Row: {
           id: string;
           user_id: string;
+          section: "written" | "skills";
           score: number;
           percent: number;
           passed: boolean;
@@ -212,6 +213,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          section?: "written" | "skills";
           score?: number;
           percent?: number;
           passed?: boolean;
@@ -222,6 +224,7 @@ export type Database = {
         Update: {
           id?: string;
           user_id?: string;
+          section?: "written" | "skills";
           score?: number;
           percent?: number;
           passed?: boolean;
@@ -327,6 +330,7 @@ export type Database = {
           user_id: string;
           lesson_id: string | null;
           domain_id: string | null;
+          section: "written" | "skills";
           confidence_level: string | null;
           confidence_score: number | null;
           score: number;
@@ -340,6 +344,7 @@ export type Database = {
           user_id: string;
           lesson_id?: string | null;
           domain_id?: string | null;
+          section?: "written" | "skills";
           confidence_level?: string | null;
           confidence_score?: number | null;
           score?: number;
@@ -353,6 +358,7 @@ export type Database = {
           user_id?: string;
           lesson_id?: string | null;
           domain_id?: string | null;
+          section?: "written" | "skills";
           confidence_level?: string | null;
           confidence_score?: number | null;
           score?: number;
@@ -374,6 +380,7 @@ export type Database = {
             | "weak_area_review"
             | "study_plan"
             | "rapid_review";
+          section: "written" | "skills";
           domain_id: string | null;
           lesson_id: string | null;
           status: "active" | "paused" | "completed" | "abandoned";
@@ -397,6 +404,7 @@ export type Database = {
             | "weak_area_review"
             | "study_plan"
             | "rapid_review";
+          section?: "written" | "skills";
           domain_id?: string | null;
           lesson_id?: string | null;
           status?: "active" | "paused" | "completed" | "abandoned";
@@ -420,6 +428,7 @@ export type Database = {
             | "weak_area_review"
             | "study_plan"
             | "rapid_review";
+          section?: "written" | "skills";
           domain_id?: string | null;
           lesson_id?: string | null;
           status?: "active" | "paused" | "completed" | "abandoned";
@@ -520,6 +529,42 @@ export type Database = {
           last_score?: number;
           bloom_level?: number;
           last_seen_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      cna_skill_progress: {
+        Row: {
+          id: string;
+          user_id: string;
+          skill_slug: string;
+          mastery_score: number;
+          walkthrough_completions: number;
+          timed_practice_completions: number;
+          last_practiced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          skill_slug: string;
+          mastery_score?: number;
+          walkthrough_completions?: number;
+          timed_practice_completions?: number;
+          last_practiced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          skill_slug?: string;
+          mastery_score?: number;
+          walkthrough_completions?: number;
+          timed_practice_completions?: number;
+          last_practiced_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

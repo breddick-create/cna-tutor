@@ -60,11 +60,15 @@ export function canAccessStudentPath(pathname: string, stage: StudentStageSnapsh
 }
 
 export function getStudentNavigation(stage: StudentStageSnapshot) {
+  if (stage.stage === "pretest_required") {
+    return [{ href: stage.nextRequiredPath, label: stage.label }];
+  }
+
   if (stage.stage === "exam_ready") {
     return [...STUDENT_WORKSPACE_NAVIGATION];
   }
 
-  return [{ href: stage.nextRequiredPath, label: stage.label }];
+  return STUDENT_WORKSPACE_NAVIGATION.filter((item) => item.href !== "/exam-day");
 }
 
 export function resolveStudentStage(args: {
@@ -79,7 +83,7 @@ export function resolveStudentStage(args: {
         description:
           "Complete the pre-test first so the app can build the right study plan for you.",
         nextRequiredPath: "/pretest",
-        allowedPrefixes: ["/pretest"],
+        allowedPrefixes: ["/pretest", "/written"],
       },
       null,
     );
@@ -95,7 +99,7 @@ export function resolveStudentStage(args: {
         description:
           "Your pre-test is done. Review your ranked study plan before moving into practice.",
         nextRequiredPath: "/study-plan",
-        allowedPrefixes: ["/study-plan", "/pretest/results"],
+        allowedPrefixes: ["/study-plan", "/pretest/results", "/written", "/skills", "/dashboard"],
       },
       null,
     );
@@ -109,7 +113,7 @@ export function resolveStudentStage(args: {
         description:
           "Your pre-test is complete. Review your ranked study plan and begin with the weakest topic first.",
         nextRequiredPath: "/study-plan",
-        allowedPrefixes: ["/study-plan", "/pretest/results"],
+        allowedPrefixes: ["/study-plan", "/pretest/results", "/written", "/skills", "/dashboard"],
       },
       progression,
     );
@@ -123,7 +127,7 @@ export function resolveStudentStage(args: {
         description:
           "You’re in the exam-ready range. Use the dashboard to keep an eye on your progress and protect weak spots from slipping.",
         nextRequiredPath: "/exam-day",
-        allowedPrefixes: ["/dashboard", "/exam-day", "/study", "/study-plan", "/quiz", "/mock-exam"],
+        allowedPrefixes: ["/dashboard", "/exam-day", "/study", "/study-plan", "/quiz", "/mock-exam", "/written", "/skills"],
       },
       progression,
     );
@@ -137,7 +141,7 @@ export function resolveStudentStage(args: {
         description:
           "You’ve built enough foundation. Your next required step is a full practice exam.",
         nextRequiredPath: "/mock-exam",
-        allowedPrefixes: ["/mock-exam"],
+        allowedPrefixes: ["/mock-exam", "/written", "/skills", "/dashboard"],
       },
       progression,
     );
@@ -153,7 +157,7 @@ export function resolveStudentStage(args: {
         description:
           "Keep working from weakest to strongest through your study plan and short checkpoints.",
         nextRequiredPath: progression.nextBestTask.href,
-        allowedPrefixes: ["/study-plan", "/study", "/quiz", "/mock-exam/results"],
+        allowedPrefixes: ["/study-plan", "/study", "/quiz", "/mock-exam/results", "/written", "/skills", "/dashboard"],
       },
       progression,
     );
@@ -166,7 +170,7 @@ export function resolveStudentStage(args: {
       description:
         "Keep following the next required step so your score and full-practice results keep moving in the right direction.",
       nextRequiredPath: progression.nextBestTask.href,
-      allowedPrefixes: ["/study-plan", "/study", "/quiz", "/mock-exam"],
+      allowedPrefixes: ["/study-plan", "/study", "/quiz", "/mock-exam", "/written", "/skills", "/dashboard"],
     },
     progression,
   );
@@ -214,6 +218,7 @@ async function getStudentResumableStudyPath(args: {
     .from("tutor_sessions")
     .select("id, status, last_activity_at, session_state_json")
     .eq("user_id", args.userId)
+    .eq("section", "written")
     .order("last_activity_at", { ascending: false })
     .limit(12);
 
