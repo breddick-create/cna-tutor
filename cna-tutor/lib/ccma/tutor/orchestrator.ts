@@ -726,8 +726,8 @@ async function generateMessage(args: MessageArgs): Promise<string> {
       });
       const text = response.output_text?.trim();
       if (text) return text;
-    } catch {
-      // Fall through to deterministic fallback
+    } catch (err) {
+      console.error("[ccma-tutor] OpenAI call failed, using deterministic fallback:", err instanceof Error ? err.message : String(err));
     }
   }
 

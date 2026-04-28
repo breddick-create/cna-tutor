@@ -92,6 +92,7 @@ export async function POST(request: Request) {
     mode: parsed.data.mode,
     userId: viewer.user.id,
     domainSlug: parsed.data.domainSlug,
+    domainSlugs: parsed.data.domainSlugs,
     timeSpentSeconds: parsed.data.timeSpentSeconds,
     domainBreakdown: result.domainBreakdown,
     score: result.percent,

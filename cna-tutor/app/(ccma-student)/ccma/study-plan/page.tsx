@@ -55,10 +55,15 @@ export default async function StudyPlanPage({
       .order("last_activity_at", { ascending: false }),
   ]);
 
+  const completedLessonIds = getCompletedLessonIdsFromSessions(studySessions ?? []);
   const studyPath = buildGuidedStudyPath({
     progression: adaptivePlan.progression,
-    completedLessonIds: getCompletedLessonIdsFromSessions(studySessions ?? []),
+    completedLessonIds,
   });
+  const remainingMinutes = adaptivePlan.priorityCategories
+    .filter((section) => section.lessonId && !completedLessonIds.has(section.lessonId))
+    .reduce((sum, section) => sum + (section.estimatedMinutes ?? 45) + 15 + 30, 0);
+  const estimatedWeeks = Math.max(1, Math.ceil(remainingMinutes / (5 * 60)));
   const weakDomainSlugs = new Set(
     adaptivePlan.progression.weakAreas.map((area) => area.domainSlug),
   );
@@ -85,6 +90,12 @@ export default async function StudyPlanPage({
               {text(
                 "Your study plan is locked to the weakest-first path below. Finish the current lesson, then use the quiz and section mock for that same domain before moving on.",
                 "Tu plan de estudio esta bloqueado a la ruta de temas mas debiles primero. Termina la leccion actual y luego usa el quiz y el examen por seccion de ese mismo dominio antes de avanzar.",
+              )}
+            </p>
+            <p className="text-muted mt-2 text-sm">
+              {text(
+                `At 5 hours/week you'll finish the remaining ${completedLessonIds.size > 0 ? `${adaptivePlan.priorityCategories.filter((s) => s.lessonId && !completedLessonIds.has(s.lessonId)).length} domains` : `${adaptivePlan.priorityCategories.filter((s) => s.lessonId).length} domains`} in about ${estimatedWeeks} ${estimatedWeeks === 1 ? "week" : "weeks"}.`,
+                `A 5 horas por semana terminaras los dominios restantes en aproximadamente ${estimatedWeeks} ${estimatedWeeks === 1 ? "semana" : "semanas"}.`,
               )}
             </p>
           </div>

@@ -110,10 +110,10 @@ export async function getCcmaAdminDashboard(filters: CcmaAdminDashboardFilters =
       ? supabase.from("ccma_student_progress").select("*").in("user_id", studentIds)
       : Promise.resolve({ data: [] as any[] }),
     studentIds.length
-      ? supabase.from("ccma_quiz_attempts").select("*").in("user_id", studentIds)
+      ? supabase.from("ccma_quiz_attempts").select("*").in("user_id", studentIds).gte("completed_at", from).lte("completed_at", to + "T23:59:59Z")
       : Promise.resolve({ data: [] as any[] }),
     studentIds.length
-      ? supabase.from("ccma_assessments").select("*").in("user_id", studentIds)
+      ? supabase.from("ccma_assessments").select("*").in("user_id", studentIds).gte("completed_at", from).lte("completed_at", to + "T23:59:59Z")
       : Promise.resolve({ data: [] as any[] }),
     studentIds.length
       ? supabase
@@ -276,6 +276,9 @@ export async function getCcmaAdminDashboard(filters: CcmaAdminDashboardFilters =
     }
     if (activity === "low_scores") {
       return row.quizzesTaken + row.mockExamsTaken > 0 && row.averageScore < 75;
+    }
+    if (activity === "low_hours") {
+      return row.quizzesTaken + row.mockExamsTaken < 3;
     }
     return true;
   });
