@@ -74,6 +74,18 @@ export async function ensureCcmaProfileForUser(user: User, roleOverride?: "stude
 
   if (error) {
     console.error("Failed to ensure CCMA profile", { userId: user.id, error });
+
+    // Last-resort: the upsert can return an error while the row still exists
+    // (e.g. a DB trigger created it between our read and write).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing } = await (admin as any)
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (existing) return existing as CcmaProfile;
+
     return null;
   }
 
@@ -100,7 +112,7 @@ export const getCcmaViewer = cache(async (): Promise<CcmaViewer | null> => {
   const profile: CcmaProfile | null =
     rawProfile?.product === "ccma"
       ? rawProfile
-      : !rawProfile && user.user_metadata?.product === "ccma"
+      : user.user_metadata?.product === "ccma"
         ? await ensureCcmaProfileForUser(user)
         : null;
 
