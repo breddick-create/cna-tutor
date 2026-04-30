@@ -1,18 +1,10 @@
+import { writtenExamDomains } from "@/content/texas-cna/written-domains";
 import { texasCnaExamBank } from "@/content/texas-cna/exam-bank";
 import type { ExamQuestion, ExamResultQuestion, PublicExamQuestion } from "@/lib/exams/types";
 
-const WRITTEN_PRETEST_QUESTIONS_PER_DOMAIN = 3;
+export { writtenExamDomains };
 
-export const writtenExamDomains = [
-  { slug: "health-care-team", title: "Member of the Health Care Team" },
-  { slug: "basic-nursing-care", title: "Basic Nursing Care" },
-  { slug: "function-and-health", title: "Function and Health of the Resident" },
-  { slug: "restorative-care", title: "Restorative Care" },
-  { slug: "promotion-of-safety", title: "Promotion of Safety" },
-  { slug: "legal-ethical", title: "Legal and Ethical Issues" },
-  { slug: "emotional-mental-health", title: "Emotional and Mental Health Needs" },
-  { slug: "cognitive-impairment", title: "Caring for Cognitively Impaired Residents" },
-];
+const WRITTEN_PRETEST_QUESTIONS_PER_DOMAIN = 3;
 
 function toPublicQuestion(question: ExamQuestion): PublicExamQuestion {
   const { correctChoiceId: _correctChoiceId, rationale: _rationale, memoryTip: _memoryTip, ...rest } = question;

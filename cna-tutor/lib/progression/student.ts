@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { PretestDomainBreakdown } from "@/lib/onboarding/pretest";
 import {
   buildStudentProgressionSnapshot,
+  type ProgressionDomainMeta,
   type ProgressionMockAttempt,
   type ProgressionQuizAttempt,
 } from "@/lib/progression/readiness";
@@ -11,6 +12,7 @@ export async function getStudentProgressionSnapshot(args: {
   userId: string;
   pretestScore: number | null;
   pretestDomainBreakdown: PretestDomainBreakdown[];
+  domains?: ReadonlyArray<ProgressionDomainMeta>;
 }) {
   const supabase = await createClient();
   const totalModules = listTutorLessons().length;
@@ -129,5 +131,6 @@ export async function getStudentProgressionSnapshot(args: {
     mockAttempts,
     totalModules,
     daysSinceActivity: Number.isNaN(daysSinceActivity ?? NaN) ? null : daysSinceActivity,
+    domains: args.domains,
   });
 }

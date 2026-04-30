@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { writtenExamDomains } from "@/content/texas-cna/written-domains";
 import { GuidedStudyPath } from "@/components/student/guided-study-path";
 import { ContinueStudyCta } from "@/components/tutor/continue-study-cta";
 import { requireViewer } from "@/lib/auth/session";
@@ -47,6 +48,7 @@ export default async function WrittenStudyPlanPage({
       userId: viewer.user.id,
       pretestScore,
       pretestDomainBreakdown,
+      domains: writtenExamDomains,
     }),
     supabase
       .from("tutor_sessions")

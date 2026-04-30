@@ -1,3 +1,4 @@
+import { writtenExamDomains } from "@/content/texas-cna/written-domains";
 import {
   getCnaSectionDescription,
   getCnaSectionHref,
@@ -305,6 +306,7 @@ export async function getStudentDashboard(args: {
       userId: args.userId,
       pretestScore: args.pretestScore,
       pretestDomainBreakdown: args.pretestDomainBreakdown,
+      domains: writtenExamDomains,
     }),
     getCnaSkillsProgress(args.userId),
   ]);

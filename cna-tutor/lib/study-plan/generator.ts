@@ -1,6 +1,6 @@
 import { texasCnaDomains } from "@/content/texas-cna/domains";
 import type { PretestDomainBreakdown } from "@/lib/onboarding/pretest";
-import type { ProgressionSnapshot } from "@/lib/progression/readiness";
+import type { ProgressionDomainMeta, ProgressionSnapshot } from "@/lib/progression/readiness";
 import { getStudentProgressionSnapshot } from "@/lib/progression/student";
 import { listTutorLessons } from "@/lib/tutor/lessons";
 
@@ -42,14 +42,16 @@ export async function getAdaptiveStudyPlan(args: {
   userId: string;
   pretestScore: number | null;
   pretestDomainBreakdown: PretestDomainBreakdown[];
+  domains?: ReadonlyArray<ProgressionDomainMeta>;
 }) {
   const progression = await getStudentProgressionSnapshot({
     userId: args.userId,
     pretestScore: args.pretestScore,
     pretestDomainBreakdown: args.pretestDomainBreakdown,
+    domains: args.domains,
   });
   const lessons = listTutorLessons();
-  const domainMeta = new Map(texasCnaDomains.map((domain) => [domain.slug, domain]));
+  const domainMeta = new Map<string, { description: string }>(texasCnaDomains.map((domain) => [domain.slug, domain]));
 
   // Business rule: the study plan must be deterministic and weakest-first.
   // We do not reshuffle or personalize with hidden heuristics. The same inputs should

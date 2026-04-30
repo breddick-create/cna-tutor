@@ -126,6 +126,12 @@ export type ProgressionSnapshot = {
   };
 };
 
+export type ProgressionDomainMeta = {
+  readonly slug: string;
+  readonly title: string;
+  readonly description: string;
+};
+
 export type BuildStudentProgressionSnapshotArgs = {
   pretestScore: number | null;
   pretestDomainBreakdown: PretestDomainBreakdown[];
@@ -138,6 +144,7 @@ export type BuildStudentProgressionSnapshotArgs = {
   totalModules?: number;
   daysSinceActivity?: number | null;
   config?: ProgressionConfig;
+  domains?: ReadonlyArray<ProgressionDomainMeta>;
 };
 
 export const RECENT_ATTEMPT_WEIGHTS = [1, 0.85, 0.7, 0.55, 0.4, 0.3] as const;
@@ -228,14 +235,16 @@ export function buildDomainSummaries(args: {
   pretestDomainBreakdown: PretestDomainBreakdown[];
   masteryRows: ProgressionDomainInput[];
   config: ProgressionConfig;
+  domains?: ReadonlyArray<ProgressionDomainMeta>;
 }) {
   const lessons = listTutorLessons();
   const pretestBySlug = new Map(
     args.pretestDomainBreakdown.map((domain) => [domain.domainSlug, domain]),
   );
   const masteryBySlug = new Map(args.masteryRows.map((row) => [row.domainSlug, row]));
+  const domainList = args.domains ?? texasCnaDomains;
 
-  return texasCnaDomains
+  return domainList
     .map((domain) => {
       const pretest = pretestBySlug.get(domain.slug);
       const mastery = masteryBySlug.get(domain.slug);
@@ -870,6 +879,7 @@ export function buildStudentProgressionSnapshot(args: BuildStudentProgressionSna
     pretestDomainBreakdown: args.pretestDomainBreakdown,
     masteryRows: args.masteryRows,
     config,
+    domains: args.domains,
   });
   const masteryAverage = averageScores(domainSummaries.map((domain) => domain.masteryScore));
   const totalModules = Math.max(1, args.totalModules ?? listTutorLessons().length);

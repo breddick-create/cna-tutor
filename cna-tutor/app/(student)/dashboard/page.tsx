@@ -22,10 +22,10 @@ import {
   resolvePreferredLanguage,
 } from "@/lib/i18n/languages";
 import {
-  getPretestDomainBreakdown,
-  getPretestScore,
-  hasCompletedPretest,
-} from "@/lib/onboarding/pretest";
+  getWrittenPretestDomainBreakdown,
+  getWrittenPretestScore,
+  hasCompletedWrittenPretest,
+} from "@/lib/onboarding/written-pretest";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -246,16 +246,16 @@ export default async function StudentDashboardPage({
 }) {
   const viewer = await requireViewer();
 
-  if (!hasCompletedPretest(viewer.user)) {
-    redirect("/pretest");
+  if (!hasCompletedWrittenPretest(viewer.user)) {
+    redirect("/written/pretest");
   }
 
   const params = await searchParams;
   const message = typeof params.message === "string" ? decodeURIComponent(params.message) : null;
   const preferredLanguage = resolvePreferredLanguage(viewer.profile.preferred_language);
   const text = (en: string, es: string) => pickLocalizedText(preferredLanguage, { en, es });
-  const pretestScore = getPretestScore(viewer.user);
-  const pretestDomainBreakdown = getPretestDomainBreakdown(viewer.user);
+  const pretestScore = getWrittenPretestScore(viewer.user);
+  const pretestDomainBreakdown = getWrittenPretestDomainBreakdown(viewer.user);
   const dashboard = await getStudentDashboard({
     userId: viewer.user.id,
     pretestScore,
