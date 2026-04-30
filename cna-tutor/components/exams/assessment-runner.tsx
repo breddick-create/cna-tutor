@@ -168,6 +168,7 @@ export function AssessmentRunner({
   questions,
   timeLimitSeconds,
   resultsHref,
+  submitHref,
   confidencePrompt,
 }: {
   mode: "quiz" | "mock_exam" | "pretest" | "weak_area_drill";
@@ -178,6 +179,7 @@ export function AssessmentRunner({
   questions: PublicExamQuestion[];
   timeLimitSeconds?: number;
   resultsHref?: string;
+  submitHref?: string;
   confidencePrompt?: {
     topicLabel: string;
   };
@@ -236,7 +238,7 @@ export function AssessmentRunner({
       setError(null);
 
       try {
-        const response = await fetch("/api/assessments/submit", {
+        const response = await fetch(submitHref ?? "/api/assessments/submit", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -268,7 +270,7 @@ export function AssessmentRunner({
         if (mode === "pretest") {
           router.push(
             appendEarnedBadgesParam(
-              "/pretest/results",
+              resultsHref ?? "/pretest/results",
               (data.newAchievements ?? []).map((badge) => ({ slug: badge.slug })),
             ),
           );
@@ -310,7 +312,7 @@ export function AssessmentRunner({
         setPending(false);
       }
     },
-    [answeredCount, answers, confidenceLevel, domainSlug, domainSlugs, mode, pending, questions, result, resultsHref, router, t],
+    [answeredCount, answers, confidenceLevel, domainSlug, domainSlugs, mode, pending, questions, result, resultsHref, router, submitHref, t],
   );
 
   useEffect(() => {

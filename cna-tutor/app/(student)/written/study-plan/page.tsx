@@ -4,7 +4,7 @@ import { GuidedStudyPath } from "@/components/student/guided-study-path";
 import { ContinueStudyCta } from "@/components/tutor/continue-study-cta";
 import { requireViewer } from "@/lib/auth/session";
 import { pickLocalizedText, resolvePreferredLanguage } from "@/lib/i18n/languages";
-import { getPretestDomainBreakdown, getPretestScore } from "@/lib/onboarding/pretest";
+import { getWrittenPretestDomainBreakdown, getWrittenPretestScore } from "@/lib/onboarding/written-pretest";
 import {
   buildGuidedStudyPath,
   getCompletedLessonIdsFromSessions,
@@ -36,8 +36,8 @@ export default async function WrittenStudyPlanPage({
   const viewer = await requireViewer();
   const language = resolvePreferredLanguage(viewer.profile.preferred_language);
   const text = (en: string, es: string) => pickLocalizedText(language, { en, es });
-  const pretestScore = getPretestScore(viewer.user);
-  const pretestDomainBreakdown = getPretestDomainBreakdown(viewer.user);
+  const pretestScore = getWrittenPretestScore(viewer.user);
+  const pretestDomainBreakdown = getWrittenPretestDomainBreakdown(viewer.user);
   const supabase = await createClient();
   const params = await searchParams;
   const selectedTopics = toTopicSelection(params.topics);
