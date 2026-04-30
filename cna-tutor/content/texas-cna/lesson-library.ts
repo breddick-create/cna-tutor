@@ -1,4 +1,5 @@
 import type { LessonSegment, TutorLesson } from "@/lib/tutor/types";
+import { writtenDomainLessons } from "@/content/texas-cna/written-lesson-library";
 
 const baseTutorLessonLibrary: TutorLesson[] = [
   {
@@ -3348,4 +3349,7 @@ function enrichLesson(lesson: TutorLesson): TutorLesson {
   };
 }
 
-export const tutorLessonLibrary: TutorLesson[] = baseTutorLessonLibrary.map(enrichLesson);
+export const tutorLessonLibrary: TutorLesson[] = [
+  ...baseTutorLessonLibrary,
+  ...writtenDomainLessons,
+].map(enrichLesson);
