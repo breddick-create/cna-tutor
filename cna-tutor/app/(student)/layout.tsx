@@ -24,8 +24,8 @@ import {
 function getStageLabel(language: SupportedLanguage, label: string) {
   const map: Record<string, { en: string; es: string }> = {
     Dashboard: { en: "Dashboard", es: "Panel" },
-    Written: { en: "Written", es: "Escrito" },
-    Skills: { en: "Skills", es: "Habilidades" },
+    "Written Exam": { en: "Written Exam", es: "Examen Escrito" },
+    "Clinical Skills": { en: "Clinical Skills", es: "Habilidades Clinicas" },
     "Pre-Test": { en: "Pre-Test", es: "Preevaluacion" },
     "Study Plan": { en: "Study Plan", es: "Plan de estudio" },
     "Practice Exam": { en: "Practice Exam", es: "Examen de practica" },

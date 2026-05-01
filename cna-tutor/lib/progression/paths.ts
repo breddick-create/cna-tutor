@@ -1,7 +1,7 @@
 export const STUDENT_WORKSPACE_NAVIGATION = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/written", label: "Written" },
-  { href: "/skills", label: "Skills" },
+  { href: "/written", label: "Written Exam" },
+  { href: "/skills", label: "Clinical Skills" },
   { href: "/exam-day", label: "Exam Day" },
 ] as const;
 
