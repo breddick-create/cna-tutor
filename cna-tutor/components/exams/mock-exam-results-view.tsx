@@ -22,10 +22,12 @@ export function MockExamResultsView({
   domainSlug,
   progression,
   examTitle,
+  basePath = "",
 }: {
   domainSlug?: string;
   progression: ProgressionSnapshot;
   examTitle: string;
+  basePath?: string;
 }) {
   const { language, t } = useLanguage();
   const [storedResult, setStoredResult] = useState<StoredMockExamResult | null>(null);
@@ -46,6 +48,7 @@ export function MockExamResultsView({
       result: storedResult.result,
       progression,
       domainSlug,
+      basePath,
     });
   }, [domainSlug, progression, resultMatchesRoute, storedResult]);
 
@@ -58,7 +61,7 @@ export function MockExamResultsView({
         })}
         eyebrow={t({ en: "Practice Exam Results", es: "Resultados del examen de practica" })}
         primaryAction={{
-          href: domainSlug ? `/mock-exam?domain=${domainSlug}` : "/mock-exam",
+          href: domainSlug ? `${basePath}/mock-exam?domain=${domainSlug}` : `${basePath}/mock-exam`,
           label: t({ en: "Go to practice exam", es: "Ir al examen de practica" }),
         }}
         secondaryAction={{
@@ -83,12 +86,12 @@ export function MockExamResultsView({
         eyebrow={t({ en: "Results Mismatch", es: "Resultados no coinciden" })}
         primaryAction={{
           href: storedResult.domainSlug
-            ? `/mock-exam/results?domain=${storedResult.domainSlug}`
-            : "/mock-exam/results",
+            ? `${basePath}/mock-exam/results?domain=${storedResult.domainSlug}`
+            : `${basePath}/mock-exam/results`,
           label: t({ en: "Open saved result", es: "Abrir resultado guardado" }),
         }}
         secondaryAction={{
-          href: domainSlug ? `/mock-exam?domain=${domainSlug}` : "/mock-exam",
+          href: domainSlug ? `${basePath}/mock-exam?domain=${domainSlug}` : `${basePath}/mock-exam`,
           label: t({ en: "Back to practice exam", es: "Volver al examen de practica" }),
         }}
         title={t({

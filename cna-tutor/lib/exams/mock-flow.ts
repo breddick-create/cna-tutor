@@ -78,13 +78,15 @@ export function getMockExamResultGuidance(args: {
   result: AssessmentResultPayload;
   progression: ProgressionSnapshot;
   domainSlug?: string;
+  basePath?: string;
 }) {
+  const base = args.basePath ?? "";
   const lowestBreakdown = [...args.result.breakdown].sort(
     (a, b) => a.percent - b.percent || a.domainTitle.localeCompare(b.domainTitle),
   )[0];
   const weakestDomainHref = lowestBreakdown
-    ? `/study-plan?topics=${lowestBreakdown.domainSlug}`
-    : "/study-plan";
+    ? `${base}/study-plan?topics=${lowestBreakdown.domainSlug}`
+    : `${base}/study-plan`;
 
   if (args.domainSlug) {
     if (args.result.summary.score < args.progression.config.thresholds.mockExamPassingScore) {
@@ -101,7 +103,7 @@ export function getMockExamResultGuidance(args: {
         },
         secondaryAction: {
           label: "Take section quiz",
-          href: args.domainSlug ? `/quiz?domain=${args.domainSlug}` : "/quiz",
+          href: args.domainSlug ? `${base}/quiz?domain=${args.domainSlug}` : `${base}/quiz`,
         },
       };
     }
@@ -122,8 +124,8 @@ export function getMockExamResultGuidance(args: {
             : "Continue study plan",
         href:
           args.progression.practiceExamUnlocked && args.progression.nextBestTask.type === "mock_exam"
-            ? "/mock-exam"
-            : "/study-plan",
+            ? `${base}/mock-exam`
+            : `${base}/study-plan`,
       },
       secondaryAction: {
         label: "Go to dashboard",
@@ -165,7 +167,7 @@ export function getMockExamResultGuidance(args: {
       },
       secondaryAction: {
         label: "Keep study plan steady",
-        href: "/study-plan",
+        href: `${base}/study-plan`,
       },
     };
   }
