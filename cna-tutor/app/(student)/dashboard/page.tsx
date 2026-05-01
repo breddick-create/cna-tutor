@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { updateLanguagePreferenceAction } from "@/app/(student)/actions";
@@ -24,7 +23,6 @@ import {
 import {
   getWrittenPretestDomainBreakdown,
   getWrittenPretestScore,
-  hasCompletedWrittenPretest,
 } from "@/lib/onboarding/written-pretest";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -245,11 +243,6 @@ export default async function StudentDashboardPage({
   searchParams: SearchParams;
 }) {
   const viewer = await requireViewer();
-
-  if (!hasCompletedWrittenPretest(viewer.user)) {
-    redirect("/written/pretest");
-  }
-
   const params = await searchParams;
   const message = typeof params.message === "string" ? decodeURIComponent(params.message) : null;
   const preferredLanguage = resolvePreferredLanguage(viewer.profile.preferred_language);

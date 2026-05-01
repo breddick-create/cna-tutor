@@ -5,6 +5,7 @@ import {
   getPretestScore,
   hasCompletedPretest,
 } from "@/lib/onboarding/pretest";
+import { hasCompletedWrittenPretest } from "@/lib/onboarding/written-pretest";
 import {
   pathMatchesPrefix,
   STUDENT_WORKSPACE_NAVIGATION,
@@ -180,13 +181,23 @@ export async function getStudentStageForUser(args: {
   userId: string;
   user: User;
 }) {
-  const pretestCompleted = hasCompletedPretest(args.user);
+  // Written pretest gates first — it drives 70% of readiness and the full study plan.
+  if (!hasCompletedWrittenPretest(args.user)) {
+    return createStage(
+      {
+        stage: "pretest_required",
+        label: "Pre-Test",
+        description: "Complete the written exam pre-test first so the app can build the right study plan for you.",
+        nextRequiredPath: "/written/pretest",
+        allowedPrefixes: ["/written"],
+      },
+      null,
+    );
+  }
 
-  if (!pretestCompleted) {
-    return resolveStudentStage({
-      pretestCompleted,
-      progression: null,
-    });
+  // Clinical pretest gates second — it drives the 30% skills readiness score.
+  if (!hasCompletedPretest(args.user)) {
+    return resolveStudentStage({ pretestCompleted: false, progression: null });
   }
 
   const progression = await getStudentProgressionSnapshot({
@@ -195,10 +206,7 @@ export async function getStudentStageForUser(args: {
     pretestDomainBreakdown: getPretestDomainBreakdown(args.user),
   });
 
-  return resolveStudentStage({
-    pretestCompleted,
-    progression,
-  });
+  return resolveStudentStage({ pretestCompleted: true, progression });
 }
 
 export async function getStudentNextRequiredPathForUser(args: {
