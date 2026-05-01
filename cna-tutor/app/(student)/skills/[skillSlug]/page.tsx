@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { recordCnaSkillPracticeAction } from "@/app/(student)/actions";
+import { SkillTimedPractice } from "@/components/skills/skill-timed-practice";
+import { SkillWalkthrough } from "@/components/skills/skill-walkthrough";
 import { requireViewer } from "@/lib/auth/session";
 import { getCnaClinicalSkill } from "@/lib/cna/skills";
 import { getCnaSkillsProgress } from "@/lib/cna/skills-progress";
@@ -104,50 +105,21 @@ export default async function SkillPracticePage({
       <section className="panel rounded-[1.75rem] p-6">
         <p className="eyebrow">Walkthrough Mode</p>
         <h2 className="mt-2 text-2xl font-semibold">Use the checklist in sequence.</h2>
-        <div className="mt-5 space-y-3">
-          {skill.walkthroughChecklist.map((step, index) => (
-            <article
-              key={`${skill.slug}-${index}`}
-              className="rounded-[1.5rem] border border-[var(--border)] bg-white/78 p-4"
-            >
-              <p className="text-sm font-semibold">Step {index + 1}</p>
-              <p className="mt-2 text-sm leading-6">{step}</p>
-            </article>
-          ))}
-        </div>
-
-        <form action={recordCnaSkillPracticeAction} className="mt-5">
-          <input name="skill_slug" type="hidden" value={skill.slug} />
-          <input name="mode" type="hidden" value="walkthrough" />
-          <input name="return_path" type="hidden" value={`/skills/${skill.slug}`} />
-          <button className="button-primary w-full sm:w-auto" type="submit">
-            Mark walkthrough complete
-          </button>
-        </form>
+        <SkillWalkthrough
+          skillSlug={skill.slug}
+          returnPath={`/skills/${skill.slug}`}
+          steps={skill.walkthroughChecklist}
+        />
       </section>
 
       <section className="panel rounded-[1.75rem] p-6">
         <p className="eyebrow">Timed Practice</p>
         <h2 className="mt-2 text-2xl font-semibold">Run it under exam pressure.</h2>
-        <p className="text-muted mt-3 max-w-3xl text-sm leading-6">
-          This skill sits in the <span className="font-semibold">{skill.timingBand}</span> timing band. Set a timer that matches the Prometric window for this skill group, perform the skill from memory, then log the run here.
-        </p>
-        <div className="mt-4 rounded-[1.5rem] border border-[rgba(217,111,50,0.18)] bg-[rgba(255,249,243,0.92)] p-4">
-          <p className="text-sm font-semibold text-[color:#9a4f17]">Timing bands</p>
-          <p className="mt-2 text-sm leading-6 text-[color:#5f3a1a]">
-            Short: 3–5 min · Moderate: 5–8 min · Long: 8–12 min · Extended: 12–15 min.
-            Use the shorter end when starting out, tighter as you gain confidence.
-          </p>
-        </div>
-
-        <form action={recordCnaSkillPracticeAction} className="mt-5">
-          <input name="skill_slug" type="hidden" value={skill.slug} />
-          <input name="mode" type="hidden" value="timed" />
-          <input name="return_path" type="hidden" value={`/skills/${skill.slug}`} />
-          <button className="button-secondary w-full sm:w-auto" type="submit">
-            Mark timed run complete
-          </button>
-        </form>
+        <SkillTimedPractice
+          skillSlug={skill.slug}
+          returnPath={`/skills/${skill.slug}`}
+          timingBand={skill.timingBand}
+        />
       </section>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
